@@ -12,22 +12,41 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import os
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# --- load .env in dev ---
+env_path = BASE_DIR / ".env"
+if env_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_path)
+    except Exception:
+        pass
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    # In prod this must be set; in dev you can raise or generate once and put in .env
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("SECRET_KEY is not set. Add it to BASE_DIR/.env or env vars.")
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+%tvx3+6$n6+(-z!mb(5gw+*vrb%h*7^yn^l=6b$bs@64^1w%2'
+DEBUG = os.getenv("DEBUG", "0") == "1"
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") if not DEBUG else ["*"]
+CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if not DEBUG else [
+    "http://127.0.0.1:8000", "http://localhost:8000"
+]
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
+# Require auth in non-dev
+if not DEBUG:
+    SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = [
+        "rest_framework.permissions.IsAuthenticated",
+        # or "rest_framework.permissions.IsAdminUser"
+    ]
+    SPECTACULAR_SETTINGS["SERVE_AUTHENTICATION"] = [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ]
 
 # Application definition
 
