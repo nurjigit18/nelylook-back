@@ -37,16 +37,6 @@ CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if not D
     "http://127.0.0.1:8000", "http://localhost:8000"
 ]
 
-# Require auth in non-dev
-if not DEBUG:
-    SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = [
-        "rest_framework.permissions.IsAuthenticated",
-        # or "rest_framework.permissions.IsAdminUser"
-    ]
-    SPECTACULAR_SETTINGS["SERVE_AUTHENTICATION"] = [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ]
 
 # Application definition
 
@@ -169,6 +159,17 @@ SPECTACULAR_SETTINGS = {
     # OTHER SETTINGS
 }
 
+# Require auth in non-dev
+if not DEBUG:
+    SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = [
+        "rest_framework.permissions.IsAuthenticated",
+        # or "rest_framework.permissions.IsAdminUser"
+    ]
+    SPECTACULAR_SETTINGS["SERVE_AUTHENTICATION"] = [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ]
+    
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),

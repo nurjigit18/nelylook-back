@@ -1,0 +1,9 @@
+asgiref
+Django
+gunicorn
+psycopg2
+sqlparse
+whitenoise
+djangorestframework
+drf-spectacular
+djangorestframework-simplejwt
