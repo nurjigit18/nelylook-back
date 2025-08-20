@@ -7,3 +7,4 @@ whitenoise
 djangorestframework
 drf-spectacular
 djangorestframework-simplejwt
+django-filter
