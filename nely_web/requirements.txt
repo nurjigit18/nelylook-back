@@ -8,3 +8,4 @@ djangorestframework
 drf-spectacular
 djangorestframework-simplejwt
 django-filter
+dj_database_url
