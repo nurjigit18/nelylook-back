@@ -3,8 +3,8 @@ import os
 ENVIRONMENT = os.environ.get('DJANGO_ENVIRONMENT', 'development')
 
 if ENVIRONMENT == 'production':
-    from .production import *
+    from .prod import *
 elif ENVIRONMENT == 'development':
-    from .development import *
+    from .dev import *
 else:
     from .base import *
