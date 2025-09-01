@@ -1,10 +1,2 @@
-import os
-
-ENVIRONMENT = os.environ.get('DJANGO_ENVIRONMENT', 'development')
-
-if ENVIRONMENT == 'production':
-    from .prod import *
-elif ENVIRONMENT == 'development':
-    from .dev import *
-else:
-    from .base import *
+# This file makes Python treat the directory as a package
+# The actual settings are imported based on DJANGO_SETTINGS_MODULE environment variable

@@ -3,6 +3,8 @@ Development settings for nely_web project.
 """
 
 from .base import *
+from urllib.parse import urlparse
+import os
 
 # Override DEBUG for development
 DEBUG = True
@@ -28,6 +30,7 @@ SIMPLE_JWT.update({
     "BLACKLIST_AFTER_ROTATION": False,           # Simpler for dev
 })
 
+# Database configuration for Railway
 DATABASES = {"default": {"ENGINE": "django.db.backends.postgresql"}}
 db_url = os.getenv("DATABASE_URL")  # provided by Railway variable reference
 if db_url:
@@ -38,7 +41,36 @@ if db_url:
         "PASSWORD": u.password,
         "HOST": u.hostname,
         "PORT": u.port or 5432,
+        "CONN_MAX_AGE": 600,
+        "OPTIONS": {
+            "sslmode": "prefer",
+        },
     })
+else:
+    # Fallback to Railway's individual PostgreSQL environment variables
+    if all([os.getenv('PGDATABASE'), os.getenv('PGUSER'), os.getenv('PGPASSWORD'), os.getenv('PGHOST')]):
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': os.getenv('PGDATABASE'),
+                'USER': os.getenv('PGUSER'),
+                'PASSWORD': os.getenv('PGPASSWORD'),
+                'HOST': os.getenv('PGHOST'),
+                'PORT': os.getenv('PGPORT', '5432'),
+                'CONN_MAX_AGE': 600,
+                'OPTIONS': {
+                    'sslmode': 'prefer',
+                },
+            }
+        }
+    else:
+        # Final fallback to SQLite for local development
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 # Enhanced logging for development - but filter out noisy autoreload
 LOGGING['handlers']['console']['formatter'] = 'verbose'
