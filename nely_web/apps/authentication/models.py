@@ -1,26 +1,38 @@
+# authentication/models.py
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
-# Create your models here.
+
 class User(AbstractUser):
+    id = None  # <- block Django from creating implicit "id"
     user_id = models.AutoField(primary_key=True)
-    email = models.CharField(unique=True, max_length=255)
-    password_hash = models.CharField(max_length=255)
+
+    # If you want email-login (recommended):
+    username = None
+    email = models.EmailField(unique=True)
+
+    # DO NOT keep your own password_hash; Django already has "password"
     first_name = models.CharField(max_length=100, blank=True, null=True)
-    last_name = models.CharField(max_length=100, blank=True, null=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
-    role = models.CharField(max_length=20, null=True, db_comment='admin, manager, customer', default='customer')
-    is_active = models.BooleanField(blank=True, null=True)
-    email_verified = models.BooleanField(default=False)
-    email_verified_at = models.DateTimeField(blank=True, null=True)
-    last_login = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(blank=True, null=True)
-    updated_at = models.DateTimeField(blank=True, null=True)
+    last_name  = models.CharField(max_length=100, blank=True, null=True)
+    phone      = models.CharField(max_length=20, blank=True, null=True)
+    role       = models.CharField(max_length=20, default="customer", db_comment="admin, manager, customer")
+
+    # Booleans should not be null
+    is_active = models.BooleanField(default=True)          # null=False by default
+    email_verified = models.BooleanField(default=False)    # null=False
+
+    # Timestamps: give a default now so existing NULLs can be filled
+    created_at = models.DateTimeField(default=timezone.now)   # temp default
+    updated_at = models.DateTimeField(default=timezone.now)   # temp default
+
+    # Email-based login (optional but consistent)
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = []
 
     class Meta:
-        db_table = 'users'
-        
-        
+        db_table = "users"
+
 class UserAddress(models.Model):
     address_id = models.AutoField(primary_key=True)
     user = models.ForeignKey('authentication.User', on_delete=models.SET_NULL, null=True, blank=True)
