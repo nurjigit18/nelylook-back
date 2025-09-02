@@ -1,6 +1,20 @@
+# IDE & venv
 .vscode/
 .webvenv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Secrets & local config
 .env
+.env.*
+*.log
+
+# Django DB
 *.sqlite3
+
+# Project-specific
+schema.yaml
 nely_web/nely_db.sql
-nely_web/schema.yaml
