@@ -1,3 +1,7 @@
 .vscode/
 .webvenv/
 nely_db.sql
+.env
+db.sqlite3
+schema.yaml
+__pycache__
