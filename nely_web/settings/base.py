@@ -1,10 +1,3 @@
-"""
-Django base settings for nely_web.
-
-- Works locally (Windows-friendly) and on Railway
-- Prefers DATABASE_URL; falls back to PG* vars; then to SQLite for local dev
-- Safe ALLOWED_HOSTS / CSRF / CORS handling for Vercel frontend
-"""
 from urllib.parse import urlparse
 from pathlib import Path
 from datetime import timedelta
