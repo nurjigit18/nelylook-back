@@ -86,7 +86,6 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "drf_spectacular",
     "django_filters",
-    "corsheaders",
     "whitenoise.runserver_nostatic",  # avoid double static handling in dev
 
     # Local apps
@@ -104,7 +103,6 @@ AUTH_USER_MODEL = "authentication.User"
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # keep high for static perf
-    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
