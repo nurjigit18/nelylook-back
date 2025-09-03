@@ -1,0 +1,8 @@
+[
+    {"model": "catalog.size", "pk": 1, "fields": {"size_name": "XS", "size_category": "Clothing"}},
+    {"model": "catalog.size", "pk": 2, "fields": {"size_name": "S",  "size_category": "Clothing"}},
+    {"model": "catalog.size", "pk": 3, "fields": {"size_name": "M",  "size_category": "Clothing"}},
+    {"model": "catalog.size", "pk": 4, "fields": {"size_name": "L",  "size_category": "Clothing"}},
+    {"model": "catalog.size", "pk": 5, "fields": {"size_name": "XL", "size_category": "Clothing"}}
+  ]
+  

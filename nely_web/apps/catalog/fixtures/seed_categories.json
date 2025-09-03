@@ -1,0 +1,11 @@
+[
+    {"model": "catalog.category", "pk": 1, "fields": {
+      "category_name": "Clothing", "parent_category": null, "is_active": true
+    }},
+    {"model": "catalog.category", "pk": 2, "fields": {
+      "category_name": "Dresses", "parent_category": 1, "is_active": true
+    }},
+    {"model": "catalog.category", "pk": 3, "fields": {
+      "category_name": "T-shirt", "parent_category": 1, "is_active": true
+    }}
+  ]
