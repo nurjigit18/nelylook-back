@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",  # <-- needed for blacklist
     "drf_spectacular",
     "django_filters",
     "whitenoise.runserver_nostatic",  # avoid double static handling in dev
@@ -144,21 +145,6 @@ DATABASES = {
     )
 }
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
-    }
-else:
-    # fallback only if you really want SQLite when no URL
-    from pathlib import Path
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
 
 
 if not DATABASES["default"]:
@@ -215,7 +201,7 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticated",
+        "rest_framework.permissions.AllowAny",
     ),
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -225,15 +211,38 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
-    # keep JSON always
-    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+
+    # Renderers
+    "DEFAULT_RENDERER_CLASSES": (
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",  # enable browsable UI in dev
+    ),
+
+    # Throttles (must include base 'user' and 'anon' if classes enabled)
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "1000/day",
+        "anon": "200/day",
+        "login": "5/min",
+        "register": "3/hour",
+        "refresh": "10/min",
+        "change_password": "5/hour",
+    },
 }
 
 if DEBUG:
-    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"].append(
-        "rest_framework.renderers.BrowsableAPIRenderer"
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",  # <-- needed for form UI
     )
-
+else:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (
+        "rest_framework.renderers.JSONRenderer",
+    )
+    
 SPECTACULAR_SETTINGS = {
     "TITLE": "nelylook API",
     "DESCRIPTION": "Clothing website product and order API",
@@ -243,24 +252,19 @@ SPECTACULAR_SETTINGS = {
     "SORT_OPERATIONS": False,
 }
 
+
 SIMPLE_JWT = {
+    "AUTH_HEADER_TYPES": ("Bearer",),
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": False,
-    "ALGORITHM": "HS256",
-    "AUTH_HEADER_TYPES": ("Bearer",),
-    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
-    "USER_ID_FIELD": "id",
+
+    # IMPORTANT for your custom PK:
+    "USER_ID_FIELD": "user_id",
     "USER_ID_CLAIM": "user_id",
-    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
-    "TOKEN_TYPE_CLAIM": "token_type",
-    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
-    "JTI_CLAIM": "jti",
-    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
-    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
-    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
+
+    # If you want rotation semantics handled centrally (I’m rotating in view):
+    # "ROTATE_REFRESH_TOKENS": True,
+    # "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # --- Caches ---
@@ -286,16 +290,22 @@ if not DEBUG:
 
 # --- Logging ---
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
 LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "simple": {"format": "{levelname} {message}", "style": "{"},
-        "verbose": {"format": "{levelname} {asctime} {module} {message}", "style": "{"},
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'auth.log',
+        },
     },
-    "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "simple"},
+    'loggers': {
+        'your_app_name.views': {  # Replace with your app name
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
-    "root": {"handlers": ["console"], "level": LOG_LEVEL},
-    "loggers": {"django": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False}},
 }

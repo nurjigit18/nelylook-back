@@ -72,10 +72,49 @@ else:
             }
         }
 
-# Enhanced logging for development - but filter out noisy autoreload
-LOGGING['handlers']['console']['formatter'] = 'verbose'
-LOGGING['loggers']['django']['level'] = 'INFO'  # Changed from DEBUG
-LOGGING['root']['level'] = 'INFO'  # Changed from DEBUG
+# Enhanced logging for development - ensure all required components exist
+# First, ensure we have the formatters we need
+if 'formatters' not in LOGGING:
+    LOGGING['formatters'] = {}
+
+if 'verbose' not in LOGGING['formatters']:
+    LOGGING['formatters']['verbose'] = {
+        'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+        'style': '{',
+    }
+
+# Ensure we have the handlers section
+if 'handlers' not in LOGGING:
+    LOGGING['handlers'] = {}
+
+# Create or update the console handler
+LOGGING['handlers']['console'] = {
+    'class': 'logging.StreamHandler',
+    'formatter': 'verbose',
+}
+
+# Ensure we have the loggers section
+if 'loggers' not in LOGGING:
+    LOGGING['loggers'] = {}
+
+# Update Django logger level
+if 'django' not in LOGGING['loggers']:
+    LOGGING['loggers']['django'] = {
+        'handlers': ['console'],
+        'level': 'INFO',
+        'propagate': True,
+    }
+else:
+    LOGGING['loggers']['django']['level'] = 'INFO'
+
+# Ensure we have a root logger
+if 'root' not in LOGGING:
+    LOGGING['root'] = {}
+
+LOGGING['root'].update({
+    'handlers': ['console'],
+    'level': 'INFO',
+})
 
 # Add any development-specific logging
 LOGGING['loggers'].update({
@@ -101,9 +140,48 @@ LOGGING['loggers'].update({
         'level': 'INFO',  # Show SQL queries but not all debug info
         'propagate': False,
     },
+    # Silence other noisy loggers in development
+    'django.security.DisallowedHost': {
+        'handlers': ['console'],
+        'level': 'ERROR',
+        'propagate': False,
+    },
+})
+
+REST_FRAMEWORK.update({
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',  # Keep browsable API in dev
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    # Relaxed throttling for development
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',           # For anonymous requests
+        'user': '1000/hour',          # For authenticated requests (this was missing!)
+        'login': '20/min',            # More permissive for testing
+        'register': '10/hour',        # More permissive for testing
+        'refresh': '50/min',          # More permissive for testing
+        'change_password': '5/hour',  # Add this for the change password throttle
+    }
 })
 
 # Security settings - relaxed for development
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+
+# Additional development-only settings
+ALLOWED_HOSTS = ['*']  # Allow all hosts in development
+
+# Print database connection info for debugging
+print(f"🗄️  Database: {DATABASES['default']['ENGINE'].split('.')[-1].upper()}")
+if 'postgresql' in DATABASES['default']['ENGINE']:
+    print(f"🔗  Host: {DATABASES['default'].get('HOST', 'Unknown')}")
+    print(f"📊  Database: {DATABASES['default'].get('NAME', 'Unknown')}")
+else:
+    print(f"📁  SQLite: {DATABASES['default'].get('NAME', 'Unknown')}")
+    
+print("🏃  Development mode active with enhanced logging")
