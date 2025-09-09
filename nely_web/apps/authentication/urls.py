@@ -1,14 +1,20 @@
 from django.urls import path
 from .views import (
-    RegisterView, LoginView, RefreshView, LogoutView,
-    MeView, ChangePasswordView
+    RegisterView,
+    LoginView,
+    RefreshView,
+    LogoutView,
+    MeView,
+    ChangePasswordView,
+    ValidateTokenView,
 )
 
 urlpatterns = [
-    path("register", RegisterView.as_view()),
-    path("login", LoginView.as_view()),
-    path("refresh", RefreshView.as_view()),
-    path("logout", LogoutView.as_view()),
-    path("me", MeView.as_view()),
-    path("change-password", ChangePasswordView.as_view()),
+    path("register/", RegisterView.as_view(), name="auth-register"),
+    path("login/",    LoginView.as_view(),    name="auth-login"),
+    path("refresh/",  RefreshView.as_view(),  name="auth-refresh"),
+    path("logout/",   LogoutView.as_view(),   name="auth-logout"),
+    path("me/",       MeView.as_view(),       name="auth-me"),
+    path("change-password/", ChangePasswordView.as_view(), name="auth-change-password"),
+    path("validate/", ValidateTokenView.as_view(), name="auth-validate"),
 ]

@@ -1,10 +1,26 @@
 from django.db import models
+import uuid
 
-# Create your models here.
+class Season(models.TextChoices):
+    SPRING = "spring", "Spring"
+    SUMMER = "summer", "Summer"
+    AUTUMN = "autumn", "Autumn"
+    WINTER = "winter", "Winter"
+    ALL    = "all",    "All-season"
+
+class Gender(models.TextChoices):
+    WOMEN = "women", "Women"
+    MEN   = "men",   "Men"
+
+class Status(models.TextChoices):
+    DRAFT     = "draft", "Draft"
+    ACTIVE    = "active","Active"
+    ARCHIVED  = "archived","Archived"
+    OUTOFSTOCK= "oos",   "Out of stock"
 
 class Category(models.Model):
     category_id = models.AutoField(primary_key=True)
-    category_name = models.CharField(max_length=100)
+    category_name = models.CharField(max_length=100, unique=True)
     parent_category = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,          # don’t allow deleting a parent that has children
@@ -19,14 +35,18 @@ class Category(models.Model):
     class Meta:
         db_table = 'categories'
         db_table_comment = 'Hierarchical: Clothing > Shirts > T-Shirts'
+        
+    def __str__(self): 
+        return self.category_name
 
 class ClothingType(models.Model):
     type_id = models.AutoField(primary_key=True)
     type_name = models.CharField(unique=True, max_length=50)
     category = models.ForeignKey(
-        Category,
-        on_delete=models.SET_NULL,         # if a category is removed, types survive (optional)
-        blank=True, null=True
+        'Category',
+        on_delete=models.CASCADE,
+        null=False,      # we want this
+        # IMPORTANT: do NOT put default=... here
     )    
     display_order = models.IntegerField(blank=True, null=True)
     is_active = models.BooleanField(blank=True, null=True)
@@ -34,38 +54,43 @@ class ClothingType(models.Model):
     class Meta:
         db_table = 'clothing_types'
         db_table_comment = 'Shirt, T-Shirt, Pants, Jeans, Dress, etc.'
-        
+    
+    def __str__(self): 
+        return f"{self.category.category_name} · {self.type_name}"
+
 class Product(models.Model):
-    product_id = models.AutoField(primary_key=True)
+    product_id   = models.AutoField(primary_key=True)
     product_name = models.CharField(max_length=255)
-    product_code = models.CharField(unique=True, max_length=50)
+    product_code = models.CharField(max_length=20, unique=True, editable=False)
     slug = models.CharField(unique=True, max_length=255, db_comment='URL-friendly: blue-cotton-tshirt')
     description = models.TextField(blank=True, null=True)
     short_description = models.TextField(blank=True, null=True, db_comment='For product cards')
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.SET_NULL,         # keep products if a category is deleted
-        blank=True, null=True
-    )    
-    clothing_type = models.ForeignKey(
-        ClothingType,
-        on_delete=models.SET_NULL,         # same idea for type
-        blank=True, null=True
-    )    
-    season = models.CharField(max_length=50, blank=True, null=True, db_comment='Spring, Summer, Fall, Winter')
-    gender = models.CharField(max_length=20, blank=True, null=True, db_comment='Men, Women, Unisex, Kids')
+    category      = models.ForeignKey('Category', on_delete=models.PROTECT, related_name='products')
+    clothing_type = models.ForeignKey('ClothingType', on_delete=models.PROTECT, related_name='products')
+    season  = models.CharField(max_length=10, choices=Season.choices)
+    gender  = models.CharField(max_length=10, choices=Gender.choices)
     base_price = models.DecimalField(max_digits=10, decimal_places=2)
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, db_comment='Discounted price if on sale')
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     is_featured = models.BooleanField(blank=True, null=True, db_comment='Show on homepage')
     is_new_arrival = models.BooleanField(blank=True, null=True)
     is_bestseller = models.BooleanField(blank=True, null=True)
-    status = models.CharField(max_length=20, blank=True, null=True, db_comment='Active, Inactive, Draft')
-    created_at = models.DateTimeField(blank=True, null=True)
-    updated_at = models.DateTimeField(blank=True, null=True)
+    status  = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'products'
+    
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)  # save first to get pk
+        if is_new and not self.product_code:
+            self.product_code = f"NL-{self.product_id:06d}"  # e.g., NL-000123
+            super().save(update_fields=['product_code'])
+
+    def __str__(self):
+        return self.product_name
 
 
 class CollectionProduct(models.Model):
@@ -184,3 +209,5 @@ class Size(models.Model):
 
     class Meta:
         db_table = 'sizes'
+
+
