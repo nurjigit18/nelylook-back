@@ -24,4 +24,5 @@ urlpatterns = [
 
     # Your other app routes, e.g.:
     path("catalog/", include("apps.catalog.urls")),
+    path("cart/", include("cart.urls")),
 ]
