@@ -9,3 +9,4 @@ drf-spectacular
 djangorestframework-simplejwt
 django-filter
 dj_database_url
+django-cors-headers
