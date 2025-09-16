@@ -98,6 +98,7 @@ INSTALLED_APPS = [
     "apps.wishlist",
     "apps.orders",
     "apps.payments",
+    "apps.media",
 ]
 
 AUTH_USER_MODEL = "authentication.User"
