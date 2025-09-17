@@ -253,6 +253,10 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": False,
+    "SERVERS": [
+        {"url": "https://api.nelylook.com", "description": "Production"},
+        {"url": "http://127.0.0.1:8000",   "description": "Local dev"},
+    ],
 }
 
 
