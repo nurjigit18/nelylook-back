@@ -4,7 +4,7 @@ from .views import FxRateViewSet, PaymentViewSet
 
 router = DefaultRouter()
 router.register(r"fx-rates", FxRateViewSet, basename="fx-rates")
-router.register(r"payments-list", PaymentViewSet, basename="payments-list")
+router.register(r"", PaymentViewSet, basename="")
 
 urlpatterns = [
     path("", include(router.urls)),

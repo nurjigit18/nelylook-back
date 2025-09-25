@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import OrderViewSet, OrderItemViewSet, DeliveryZoneViewSet
 
 router = DefaultRouter()
-router.register(r"orders-list", OrderViewSet, basename="orders-list")
+router.register(r"", OrderViewSet, basename="orders-list")
 router.register(r"order-items", OrderItemViewSet, basename="order-items")
 router.register(r"delivery-zones", DeliveryZoneViewSet, basename="delivery-zones")
 
