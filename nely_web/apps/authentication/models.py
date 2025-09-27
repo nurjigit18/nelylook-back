@@ -1,6 +1,6 @@
 # authentication/models.py
 from django.db import models
-from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.contrib.auth.models import AbstractUser, BaseUserManager, Group, Permission
 from django.utils import timezone
 
 class UserManager(BaseUserManager):
@@ -36,8 +36,29 @@ class User(AbstractUser):
     is_active = models.BooleanField(default=True)
     email_verified = models.BooleanField(default=False)
 
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Explicitly define the many-to-many relationships with custom db_table names
+    groups = models.ManyToManyField(
+        Group,
+        verbose_name='groups',
+        blank=True,
+        help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
+        related_name="user_set",
+        related_query_name="user",
+        db_table='users_groups'  # This creates the table Django is looking for
+    )
+    
+    user_permissions = models.ManyToManyField(
+        Permission,
+        verbose_name='user permissions',
+        blank=True,
+        help_text='Specific permissions for this user.',
+        related_name="user_set",
+        related_query_name="user",
+        db_table='users_user_permissions'  # Custom table name for user permissions
+    )
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []  # no username
@@ -61,7 +82,8 @@ class UserAddress(models.Model):
     postal_code = models.CharField(max_length=20)
     phone = models.CharField(max_length=20, blank=True, null=True)
     is_default = models.BooleanField(blank=True, null=True)
-    created_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=False)
 
     class Meta:
         db_table = 'user_addresses'
+    

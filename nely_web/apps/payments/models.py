@@ -33,8 +33,8 @@ class Payment(models.Model):
     currency = models.ForeignKey('core.Currency', on_delete=models.PROTECT)
     status = models.CharField(max_length=20, blank=True, null=True)  # Pending, Completed, etc.
     gateway_response = models.JSONField(blank=True, null=True)       # store raw gateway JSON
-    processed_at = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=False)
 
     class Meta:
         db_table = "payments"

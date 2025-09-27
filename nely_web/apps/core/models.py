@@ -23,7 +23,7 @@ class AdminLogs(models.Model):
     new_values = models.TextField(blank=True, null=True)  # This field type is a guess.
     ip_address = models.CharField(max_length=45, blank=True, null=True)
     user_agent = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=False)
 
     class Meta:
         db_table = 'admin_logs'
@@ -37,8 +37,8 @@ class Currency(models.Model):
     is_base_currency = models.BooleanField(blank=True, null=True, db_comment='Only one base currency')
     is_active = models.BooleanField(blank=True, null=True)
     decimal_places = models.IntegerField(blank=True, null=True, db_comment='Number of decimal places')
-    created_at = models.DateTimeField(blank=True, null=True)
-    updated_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'currencies'

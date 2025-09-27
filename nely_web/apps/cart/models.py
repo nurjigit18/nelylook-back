@@ -11,7 +11,7 @@ class ShoppingCart(models.Model):
         related_name='carts'
     )
     session_id = models.CharField(max_length=255, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
