@@ -46,7 +46,7 @@ class UserAdmin(RoleBasedAdminMixin, BaseUserAdmin):
 
 @admin.register(UserAddress)
 class UserAddressAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
-    list_display = ['user', 'address_type', 'city', 'country', 'is_default']
+    list_display = ['user', 'address_line1', 'city', 'country', 'phone']
     list_filter = ['address_type', 'country', 'is_default']
     search_fields = ['user__email', 'city', 'address_line1']
     exclude = ('address_type', 'is_default')

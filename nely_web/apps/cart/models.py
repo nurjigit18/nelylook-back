@@ -16,6 +16,7 @@ class ShoppingCart(models.Model):
 
     class Meta:
         db_table = 'shopping_cart'
+
         indexes = [
             models.Index(fields=['user']),
             models.Index(fields=['session_id']),

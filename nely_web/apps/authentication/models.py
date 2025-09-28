@@ -28,16 +28,16 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True)
 
-    first_name = models.CharField(max_length=100, blank=True, null=True)
-    last_name  = models.CharField(max_length=100, blank=True, null=True)
-    phone      = models.CharField(max_length=20, blank=True, null=True)
-    role       = models.CharField(max_length=20, default="customer")
+    first_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Имя")
+    last_name  = models.CharField(max_length=100, blank=True, null=True, verbose_name="Фамилия")
+    phone      = models.CharField(max_length=20, blank=True, null=True, verbose_name="Номер телефона")
+    role       = models.CharField(max_length=20, default="customer", verbose_name="Роль")
 
-    is_active = models.BooleanField(default=True)
-    email_verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    email_verified = models.BooleanField(default=False, verbose_name="Почта подтверждена")
 
-    created_at = models.DateTimeField(auto_now_add=True, null=False)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=False, verbose_name="Дата создания")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
 
     # Explicitly define the many-to-many relationships with custom db_table names
     groups = models.ManyToManyField(
@@ -67,23 +67,27 @@ class User(AbstractUser):
 
     class Meta:
         db_table = "users"
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
 
 class UserAddress(models.Model):
     address_id = models.AutoField(primary_key=True)
-    user = models.ForeignKey('authentication.User', on_delete=models.SET_NULL, null=True, blank=True)
+    user = models.ForeignKey('authentication.User', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Пользователь")
     address_type = models.CharField(max_length=20, blank=True, null=True, db_comment='Billing, Shipping, Both')
-    first_name = models.CharField(max_length=100, blank=True, null=True)
-    last_name = models.CharField(max_length=100, blank=True, null=True)
-    address_line1 = models.CharField(max_length=255)
-    address_line2 = models.CharField(max_length=255, blank=True, null=True)
-    city = models.CharField(max_length=100)
-    region = models.CharField(max_length=100, blank=True, null=True)
-    country = models.CharField(max_length=100)
-    postal_code = models.CharField(max_length=20)
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    first_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Имя")
+    last_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Фамилия")
+    address_line1 = models.CharField(max_length=255, verbose_name="Адресс 1")
+    address_line2 = models.CharField(max_length=255, blank=True, null=True, verbose_name="Адресс 2")
+    city = models.CharField(max_length=100, verbose_name="Город")
+    region = models.CharField(max_length=100, blank=True, null=True, verbose_name="Область")
+    country = models.CharField(max_length=100, verbose_name="Страна")
+    postal_code = models.CharField(max_length=20, verbose_name="Почтовый индекс")
+    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Номер телефона")
     is_default = models.BooleanField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True, null=False)
+    created_at = models.DateTimeField(auto_now_add=True, null=False, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'user_addresses'
+        verbose_name = 'Адрес пользователя'
+        verbose_name_plural = 'Адреса пользователей'
     

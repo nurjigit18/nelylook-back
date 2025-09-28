@@ -42,4 +42,5 @@ class Currency(models.Model):
 
     class Meta:
         db_table = 'currencies'
+        verbose_name_plural = 'Валюты'
         db_table_comment = 'Base currency (KGS), others calculated via exchange rate'

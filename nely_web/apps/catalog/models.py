@@ -35,7 +35,8 @@ class Category(models.Model):
 
     class Meta:
         db_table = 'categories'
-        verbose_name_plural = 'Categories'
+        verbose_name = 'Категория'
+        verbose_name_plural = 'Категории'
         
     def __str__(self): 
         return self.category_name
@@ -54,6 +55,7 @@ class ClothingType(models.Model):
 
     class Meta:
         db_table = 'clothing_types'
+        verbose_name_plural = 'Тип одежды'
     
     def __str__(self): 
         return f"{self.category.category_name} · {self.type_name}"
@@ -67,6 +69,7 @@ class Color(models.Model):
 
     class Meta:
         db_table = 'colors'
+        verbose_name_plural = 'Цвета'
     
     def __str__(self):
         return self.color_name
@@ -82,6 +85,7 @@ class Size(models.Model):
 
     class Meta:
         db_table = 'sizes'
+        verbose_name_plural = 'Размеры'
         ordering = ['sort_order', 'size_name']
     
     def __str__(self):
@@ -100,6 +104,7 @@ class Collection(models.Model):
 
     class Meta:
         db_table = 'collections'
+        verbose_name_plural = 'Коллекции'
     
     def __str__(self):
         return self.collection_name
@@ -138,6 +143,7 @@ class Product(models.Model):
 
     class Meta:
         db_table = 'products'
+        verbose_name_plural = 'Товары'
         ordering = ['-created_at']
     
     def save(self, *args, **kwargs):
@@ -182,6 +188,7 @@ class ProductVariant(models.Model):
 
     class Meta:
         db_table = 'product_variants'
+        verbose_name_plural = 'Вариации товаров'
         unique_together = [['product', 'size', 'color']]
         ordering = ['product', 'color', 'size']
     
@@ -218,6 +225,7 @@ class ProductImage(models.Model):
 
     class Meta:
         db_table = 'product_images'
+        verbose_name_plural = 'Фото товаров'
         ordering = ['display_order']
     
     def __str__(self):
@@ -241,6 +249,7 @@ class RelatedProduct(models.Model):
 
     class Meta:
         db_table = 'related_products'
+        verbose_name_plural = 'Похожие товары'
         unique_together = [['product', 'related_product']]
     
     def __str__(self):
@@ -262,6 +271,7 @@ class CollectionProduct(models.Model):
 
     class Meta:
         db_table = 'collection_products'
+        verbose_name_plural = 'Коллекционные товары'
         unique_together = [['collection', 'product']]
     
     def __str__(self):

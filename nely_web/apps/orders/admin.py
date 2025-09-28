@@ -25,7 +25,7 @@ class OrderAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     
     fieldsets = (
         ('Order Information', {
-            'fields': ('order_number', 'user', 'guest_email', 'order_date')
+            'fields': ('order_number', 'user', 'guest_email')
         }),
         ('Status', {
             'fields': ('order_status', 'payment_status', 'payment_method')
