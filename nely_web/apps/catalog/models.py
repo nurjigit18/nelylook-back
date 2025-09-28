@@ -21,7 +21,7 @@ class Status(models.TextChoices):
 
 class Category(models.Model):
     category_id = models.AutoField(primary_key=True)
-    category_name = models.CharField(max_length=100, unique=True)
+    category_name = models.CharField(max_length=100, unique=True, verbose_name="Категории")
     parent_category = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,
@@ -29,9 +29,9 @@ class Category(models.Model):
         blank=True, null=True
     )    
     category_path = models.CharField(max_length=500, blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    display_order = models.IntegerField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
+    description = models.TextField(blank=True, null=True, verbose_name="Описание")
+    display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
+    is_active = models.BooleanField(default=True, verbose_name="Активно")
 
     class Meta:
         db_table = 'categories'
@@ -43,15 +43,15 @@ class Category(models.Model):
 
 class ClothingType(models.Model):
     type_id = models.AutoField(primary_key=True)
-    type_name = models.CharField(unique=True, max_length=50)
+    type_name = models.CharField(unique=True, max_length=50, verbose_name="Тип одежды")
     category = models.ForeignKey(
         Category,  # Direct reference, not string
         on_delete=models.CASCADE,
         related_name='clothing_types',
         # Remove null constraint for now to avoid migration issues
     )    
-    display_order = models.IntegerField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
 
     class Meta:
         db_table = 'clothing_types'
@@ -62,10 +62,10 @@ class ClothingType(models.Model):
 
 class Color(models.Model):
     color_id = models.AutoField(primary_key=True)
-    color_name = models.CharField(max_length=50, unique=True)
-    color_code = models.CharField(max_length=10, blank=True, null=True)
-    color_family = models.CharField(max_length=30, blank=True, null=True)
-    is_active = models.BooleanField(default=True)
+    color_name = models.CharField(max_length=50, unique=True, verbose_name="Цвет")
+    color_code = models.CharField(max_length=10, blank=True, null=True, verbose_name="Код цвета")
+    color_family = models.CharField(max_length=30, blank=True, null=True, verbose_name="Категория цвета")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
 
     class Meta:
         db_table = 'colors'
@@ -76,12 +76,12 @@ class Color(models.Model):
 
 class Size(models.Model):
     size_id = models.AutoField(primary_key=True)
-    size_name = models.CharField(max_length=20, unique=True)
-    size_category = models.CharField(max_length=20, blank=True, null=True)
-    size_group = models.CharField(max_length=20, blank=True, null=True)
-    sort_order = models.IntegerField(blank=True, null=True)
+    size_name = models.CharField(max_length=20, unique=True, verbose_name="Размер")
+    size_category = models.CharField(max_length=20, blank=True, null=True, verbose_name="Категория размера")
+    size_group = models.CharField(max_length=20, blank=True, null=True, verbose_name="Группа размера")
+    sort_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет сортировки")
     measurements = models.TextField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, verbose_name="Активно")
 
     class Meta:
         db_table = 'sizes'
@@ -93,14 +93,14 @@ class Size(models.Model):
 
 class Collection(models.Model):
     collection_id = models.AutoField(primary_key=True)
-    collection_name = models.CharField(max_length=100)
+    collection_name = models.CharField(max_length=100, verbose_name="Коллекция")
     collection_slug = models.CharField(unique=True, max_length=255)
-    description = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True, verbose_name="Описание")
     banner_image = models.CharField(max_length=500, blank=True, null=True)
     is_featured = models.BooleanField(default=False)
-    display_order = models.IntegerField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'collections'
@@ -111,11 +111,11 @@ class Collection(models.Model):
 
 class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
-    product_name = models.CharField(max_length=255)
-    product_code = models.CharField(max_length=20, unique=True, editable=False, blank=True)
+    product_name = models.CharField(max_length=255, verbose_name="Название модели")
+    product_code = models.CharField(max_length=20, unique=True, editable=False, blank=True, verbose_name="Код модели")
     slug = models.SlugField(unique=True, max_length=255)
-    description = models.TextField(blank=True, null=True)
-    short_description = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True, verbose_name="Описание")
+    short_description = models.TextField(blank=True, null=True, verbose_name="Краткое описание")
     
     # Fixed foreign key references
     category = models.ForeignKey(
@@ -129,17 +129,17 @@ class Product(models.Model):
         related_name='products'
     )
     
-    season = models.CharField(max_length=10, choices=Season.choices, default=Season.ALL)
-    gender = models.CharField(max_length=10, choices=Gender.choices)
-    base_price = models.DecimalField(max_digits=10, decimal_places=2)
-    sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    season = models.CharField(max_length=10, choices=Season.choices, default=Season.ALL, verbose_name="Сезон")
+    gender = models.CharField(max_length=10, choices=Gender.choices, verbose_name="Пол")
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Базовая цена")
+    sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Цена по скидке")
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Расходная цена")
     is_featured = models.BooleanField(default=False)
-    is_new_arrival = models.BooleanField(default=False)
-    is_bestseller = models.BooleanField(default=False)
+    is_new_arrival = models.BooleanField(default=False, verbose_name="Новое")
+    is_bestseller = models.BooleanField(default=False, verbose_name="Популярное")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
 
     class Meta:
         db_table = 'products'
@@ -163,7 +163,7 @@ class ProductVariant(models.Model):
         on_delete=models.CASCADE,
         related_name='variants'
     )   
-    sku = models.CharField(unique=True, max_length=100, blank=True)
+    sku = models.CharField(unique=True, max_length=100, blank=True, verbose_name="Артикул")
     size = models.ForeignKey(
         Size,
         on_delete=models.PROTECT,
@@ -176,15 +176,15 @@ class ProductVariant(models.Model):
         blank=True, null=True,
         related_name='variants'
     )    
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
+    sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Цена по скидке")
     weight = models.DecimalField(max_digits=8, decimal_places=3, blank=True, null=True)
     dimensions = models.CharField(max_length=100, blank=True, null=True)
-    barcode = models.CharField(max_length=50, blank=True, null=True)
-    stock_quantity = models.IntegerField(default=0)
-    low_stock_threshold = models.IntegerField(default=10)
+    barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="Баркод")
+    stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
+    low_stock_threshold = models.IntegerField(default=10, verbose_name="Мин. в наличии")
     status = models.CharField(max_length=20, default='Active')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'product_variants'
@@ -216,12 +216,12 @@ class ProductImage(models.Model):
         related_name='images',
         blank=True, null=True
     )    
-    image_url = models.URLField(max_length=500)
+    image_url = models.URLField(max_length=500, verbose_name="Ссылка")
     alt_text = models.CharField(max_length=255, blank=True, null=True)
     is_primary = models.BooleanField(default=False)
     display_order = models.IntegerField(default=1)
-    image_type = models.CharField(max_length=20, default='Main')
-    created_at = models.DateTimeField(auto_now_add=True)
+    image_type = models.CharField(max_length=20, default='Main', verbose_name="Тип файла")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'product_images'
