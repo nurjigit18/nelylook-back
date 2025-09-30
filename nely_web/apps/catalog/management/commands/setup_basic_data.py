@@ -1,11 +1,3 @@
-# Create: apps/catalog/management/commands/setup_basic_data.py
-# First create directories:
-# apps/catalog/management/
-# apps/catalog/management/__init__.py  (empty file)
-# apps/catalog/management/commands/
-# apps/catalog/management/commands/__init__.py  (empty file)
-# apps/catalog/management/commands/setup_basic_data.py
-
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from apps.catalog.models import Category, ClothingType, Color, Size
@@ -111,14 +103,7 @@ class Command(BaseCommand):
                 {'name': 'L', 'category': 'Clothing', 'group': 'Standard', 'order': 4},
                 {'name': 'XL', 'category': 'Clothing', 'group': 'Standard', 'order': 5},
                 {'name': 'XXL', 'category': 'Clothing', 'group': 'Standard', 'order': 6},
-                # Shoe sizes (EU)
-                {'name': '36', 'category': 'Shoes', 'group': 'EU', 'order': 36},
-                {'name': '37', 'category': 'Shoes', 'group': 'EU', 'order': 37},
-                {'name': '38', 'category': 'Shoes', 'group': 'EU', 'order': 38},
-                {'name': '39', 'category': 'Shoes', 'group': 'EU', 'order': 39},
-                {'name': '40', 'category': 'Shoes', 'group': 'EU', 'order': 40},
-                {'name': '41', 'category': 'Shoes', 'group': 'EU', 'order': 41},
-                {'name': '42', 'category': 'Shoes', 'group': 'EU', 'order': 42},
+
                 # One size fits all
                 {'name': 'One Size', 'category': 'Accessories', 'group': 'Universal', 'order': 1},
             ]

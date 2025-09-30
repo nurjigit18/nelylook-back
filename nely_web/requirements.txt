@@ -11,3 +11,5 @@ django-filter
 dj_database_url
 django-cors-headers
 supabase
+pillow
+django-nested-admin

@@ -1,5 +1,6 @@
 # apps/catalog/models.py - FIXED VERSION
 from django.db import models
+from apps.core.storage import SupabaseStorage
 import uuid
 
 class Season(models.TextChoices):
@@ -14,10 +15,10 @@ class Gender(models.TextChoices):
     MEN   = "men",   "Men"
 
 class Status(models.TextChoices):
-    DRAFT     = "draft", "Draft"
-    ACTIVE    = "active","Active"
-    ARCHIVED  = "archived","Archived"
-    OUTOFSTOCK= "oos",   "Out of stock"
+    DRAFT     = "draft", "Черновик"
+    ACTIVE    = "active","В наличии"
+    ARCHIVED  = "archived","Архивирован"
+    OUTOFSTOCK= "oos",   "Нет в наличии"
 
 class Category(models.Model):
     category_id = models.AutoField(primary_key=True)
@@ -26,12 +27,13 @@ class Category(models.Model):
         'self',
         on_delete=models.PROTECT,
         related_name='children',
-        blank=True, null=True
+        blank=True, null=True,
+        verbose_name='Главная категория'
     )    
     category_path = models.CharField(max_length=500, blank=True, null=True)
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
     display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
-    is_active = models.BooleanField(default=True, verbose_name="Активно")
+    is_active = models.BooleanField(default=True, verbose_name="В наличии")
 
     class Meta:
         db_table = 'categories'
@@ -48,10 +50,11 @@ class ClothingType(models.Model):
         Category,  # Direct reference, not string
         on_delete=models.CASCADE,
         related_name='clothing_types',
+        verbose_name='Категория'
         # Remove null constraint for now to avoid migration issues
     )    
     display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
-    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    is_active = models.BooleanField(default=True, verbose_name="В наличии")
 
     class Meta:
         db_table = 'clothing_types'
@@ -65,7 +68,7 @@ class Color(models.Model):
     color_name = models.CharField(max_length=50, unique=True, verbose_name="Цвет")
     color_code = models.CharField(max_length=10, blank=True, null=True, verbose_name="Код цвета")
     color_family = models.CharField(max_length=30, blank=True, null=True, verbose_name="Категория цвета")
-    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    is_active = models.BooleanField(default=True, verbose_name="В наличии")
 
     class Meta:
         db_table = 'colors'
@@ -77,11 +80,11 @@ class Color(models.Model):
 class Size(models.Model):
     size_id = models.AutoField(primary_key=True)
     size_name = models.CharField(max_length=20, unique=True, verbose_name="Размер")
-    size_category = models.CharField(max_length=20, blank=True, null=True, verbose_name="Категория размера")
-    size_group = models.CharField(max_length=20, blank=True, null=True, verbose_name="Группа размера")
-    sort_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет сортировки")
+    size_category = models.CharField(max_length=20, blank=True, null=True, verbose_name="Категория")
+    size_group = models.CharField(max_length=20, blank=True, null=True, verbose_name="Классификация")
+    sort_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
     measurements = models.TextField(blank=True, null=True)
-    is_active = models.BooleanField(default=True, verbose_name="Активно")
+    is_active = models.BooleanField(default=True, verbose_name="В наличии")
 
     class Meta:
         db_table = 'sizes'
@@ -94,12 +97,12 @@ class Size(models.Model):
 class Collection(models.Model):
     collection_id = models.AutoField(primary_key=True)
     collection_name = models.CharField(max_length=100, verbose_name="Коллекция")
-    collection_slug = models.CharField(unique=True, max_length=255)
+    collection_slug = models.CharField(unique=True, max_length=255, verbose_name='URL-идентификатор')
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
     banner_image = models.CharField(max_length=500, blank=True, null=True)
-    is_featured = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
-    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    is_active = models.BooleanField(default=True, verbose_name="В наличии")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:
@@ -113,7 +116,7 @@ class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
     product_name = models.CharField(max_length=255, verbose_name="Название модели")
     product_code = models.CharField(max_length=20, unique=True, editable=False, blank=True, verbose_name="Код модели")
-    slug = models.SlugField(unique=True, max_length=255)
+    slug = models.SlugField(unique=True, max_length=255, verbose_name='URL-идентификатор')
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
     short_description = models.TextField(blank=True, null=True, verbose_name="Краткое описание")
     
@@ -121,12 +124,14 @@ class Product(models.Model):
     category = models.ForeignKey(
         Category, 
         on_delete=models.PROTECT, 
-        related_name='products'
+        related_name='products',
+        verbose_name='Категория'
     )
     clothing_type = models.ForeignKey(
         ClothingType, 
         on_delete=models.PROTECT, 
-        related_name='products'
+        related_name='products',
+        verbose_name='Тип одежды'
     )
     
     season = models.CharField(max_length=10, choices=Season.choices, default=Season.ALL, verbose_name="Сезон")
@@ -134,10 +139,10 @@ class Product(models.Model):
     base_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Базовая цена")
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Цена по скидке")
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Расходная цена")
-    is_featured = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     is_new_arrival = models.BooleanField(default=False, verbose_name="Новое")
     is_bestseller = models.BooleanField(default=False, verbose_name="Популярное")
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT, verbose_name='Статус')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
 
@@ -161,20 +166,23 @@ class ProductVariant(models.Model):
     product = models.ForeignKey(
         Product, 
         on_delete=models.CASCADE,
-        related_name='variants'
+        related_name='variants',
+        verbose_name='Модель'
     )   
     sku = models.CharField(unique=True, max_length=100, blank=True, verbose_name="Артикул")
     size = models.ForeignKey(
         Size,
         on_delete=models.PROTECT,
         blank=True, null=True,
-        related_name='variants'
+        related_name='variants',
+        verbose_name='Размер'
     )    
     color = models.ForeignKey(
         Color,
         on_delete=models.PROTECT,
         blank=True, null=True,
-        related_name='variants'
+        related_name='variants',
+        verbose_name='Цвет'
     )    
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Цена по скидке")
@@ -183,7 +191,7 @@ class ProductVariant(models.Model):
     barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="Баркод")
     stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
     low_stock_threshold = models.IntegerField(default=10, verbose_name="Мин. в наличии")
-    status = models.CharField(max_length=20, default='Active')
+    status = models.CharField(max_length=20, default='Active', verbose_name='Статус')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:
@@ -205,31 +213,64 @@ class ProductVariant(models.Model):
 class ProductImage(models.Model):
     image_id = models.AutoField(primary_key=True)
     product = models.ForeignKey(
-        Product,
+        'Product',
         on_delete=models.CASCADE,
         related_name='images',
-        blank=True, null=True
+        blank=True, null=True,
+        verbose_name='Модель'
     )    
     variant = models.ForeignKey(
-        ProductVariant,
+        'ProductVariant',
         on_delete=models.CASCADE,
         related_name='images',
-        blank=True, null=True
+        blank=True, null=True,
+        verbose_name='Вариация'
     )    
-    image_url = models.URLField(max_length=500, verbose_name="Ссылка")
-    alt_text = models.CharField(max_length=255, blank=True, null=True)
-    is_primary = models.BooleanField(default=False)
-    display_order = models.IntegerField(default=1)
-    image_type = models.CharField(max_length=20, default='Main', verbose_name="Тип файла")
+    
+    # NEW: File upload field - uploads to Supabase
+    image_file = models.ImageField(
+        upload_to='products/',
+        storage=SupabaseStorage,
+        blank=True,
+        null=True,
+        verbose_name='Загрузить фото',
+        help_text='Загрузите фото (будет сохранено в Supabase)'
+    )
+    
+    # Existing URL field - auto-populated from Supabase
+    image_url = models.URLField(
+        max_length=500, 
+        blank=True,
+        verbose_name="Ссылка",
+        help_text='Автоматически заполняется после загрузки'
+    )
+    
+    alt_text = models.CharField(max_length=255, blank=True, null=True, verbose_name='Альтернативный текст')
+    is_primary = models.BooleanField(default=False, verbose_name='Основной')
+    display_order = models.IntegerField(default=1, verbose_name='Приоритет показа')
+    image_type = models.CharField(max_length=20, default='jpg', verbose_name="Тип файла")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'product_images'
+        verbose_name = 'Фото товара'
         verbose_name_plural = 'Фото товаров'
         ordering = ['display_order']
     
+    def save(self, *args, **kwargs):
+        """
+        Override save to automatically populate image_url from uploaded file
+        """
+        if self.image_file and not self.image_url:
+            # Get the public URL from Supabase
+            storage = SupabaseStorage()
+            self.image_url = storage.url(self.image_file.name)
+        
+        super().save(*args, **kwargs)
+    
     def __str__(self):
-        return f"Image for {self.product or self.variant}"
+        return f"Фото для {self.product or self.variant}"
+
 
 class RelatedProduct(models.Model):
     relation_id = models.AutoField(primary_key=True)
