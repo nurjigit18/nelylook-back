@@ -18,7 +18,12 @@ class Status(models.TextChoices):
     DRAFT     = "draft", "Черновик"
     ACTIVE    = "active","В наличии"
     ARCHIVED  = "archived","Архивирован"
-    OUTOFSTOCK= "oos",   "Нет в наличии"
+    OUT_OF_STOCK= "oos",   "Нет в наличии"
+    
+class ImageFile(models.TextChoices):
+    PNG = "png", "png"
+    JPG = "jpg", "jpg"
+    JPEG = "jpeg", "jpeg"
 
 class Category(models.Model):
     category_id = models.AutoField(primary_key=True)
@@ -142,7 +147,8 @@ class Product(models.Model):
     is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     is_new_arrival = models.BooleanField(default=False, verbose_name="Новое")
     is_bestseller = models.BooleanField(default=False, verbose_name="Популярное")
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT, verbose_name='Статус')
+    stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE, verbose_name='Статус')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
 
@@ -153,6 +159,11 @@ class Product(models.Model):
     
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        if self.stock_quantity <= 0:
+            self.status = Status.OUT_OF_STOCK
+        else:
+            if self.status == Status.OUT_OF_STOCK:
+                self.status = Status.ACTIVE
         super().save(*args, **kwargs)
         if is_new and not self.product_code:
             self.product_code = f"NL-{self.product_id:06d}"
@@ -191,7 +202,7 @@ class ProductVariant(models.Model):
     barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="Баркод")
     stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
     low_stock_threshold = models.IntegerField(default=10, verbose_name="Мин. в наличии")
-    status = models.CharField(max_length=20, default='Active', verbose_name='Статус')
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE, verbose_name='Статус')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:
@@ -201,11 +212,18 @@ class ProductVariant(models.Model):
         ordering = ['product', 'color', 'size']
     
     def save(self, *args, **kwargs):
-        if not self.sku:
-            color_code = self.color.color_name[:2].upper() if self.color else 'NA'
-            size_code = self.size.size_name if self.size else 'OS'
-            self.sku = f"{self.product.product_code}-{color_code}-{size_code}"
-        super().save(*args, **kwargs)
+        is_new = self.pk is None
+        
+        if self.stock_quantity <= 0:
+            self.status = Status.OUT_OF_STOCK
+        else:
+            if self.status == Status.OUT_OF_STOCK:
+                self.status = Status.ACTIVE
+                
+        super().save(*args, **kwargs)  # Save once to get PK
+        if is_new and not self.sku:
+            self.sku = f"25{self.id:06d}"  # e.g. 000001, 000002
+            super().save(update_fields=["sku"])
     
     def __str__(self):
         return f"{self.product.product_name} - {self.color} - {self.size}"
@@ -248,7 +266,7 @@ class ProductImage(models.Model):
     alt_text = models.CharField(max_length=255, blank=True, null=True, verbose_name='Альтернативный текст')
     is_primary = models.BooleanField(default=False, verbose_name='Основной')
     display_order = models.IntegerField(default=1, verbose_name='Приоритет показа')
-    image_type = models.CharField(max_length=20, default='jpg', verbose_name="Тип файла")
+    image_type = models.CharField(max_length=20, choices=ImageFile.choices, default=ImageFile.PNG, verbose_name="Тип файла")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
     class Meta:

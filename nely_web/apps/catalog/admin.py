@@ -80,12 +80,10 @@ class ProductImageInline(admin.TabularInline):
     form = ProductImageForm
     extra = 1
     fields = [
-        'image_file',      # File upload field (NEW)
-        'image_url',       # Auto-populated URL
+        'image_file',      # File upload field (NEW)    
         'alt_text', 
         'is_primary', 
         'display_order', 
-        'image_type'
     ]
     readonly_fields = ['image_url']
     
@@ -99,17 +97,17 @@ class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 1
     fields = ['sku', 'size', 'color', 'price', 'sale_price', 'stock_quantity', 'status']
-    readonly_fields = ['sku']
+    readonly_fields = ['sku']   # 🚀 Makes SKU non-editable
 
 
 @admin.register(Product)
 class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     list_display = [
         'product_name', 'product_code', 'category', 'clothing_type', 
-        'base_price', 'status', 'is_featured', 'created_at'
+        'base_price', 'status', 'stock_quantity','is_featured'
     ]
     list_filter = [
-        'status', 'category', 'clothing_type', 'season', 'gender',
+        'status', 'category', 'clothing_type', 'season',
         'is_featured', 'is_new_arrival', 'is_bestseller'
     ]
     search_fields = ['product_name', 'product_code', 'description']
@@ -160,9 +158,10 @@ class ProductVariantAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
         'sku', 'product', 'size', 'color', 'price', 
         'stock_quantity', 'status'
     ]
+    list_editable = ['stock_quantity',]
     list_filter = ['status', 'product__category', 'size', 'color']
     search_fields = ['sku', 'product__product_name', 'barcode']
-    readonly_fields = ['sku']
+    readonly_fields = ['sku']   # 🚀 Prevents manual editing
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
