@@ -3,6 +3,12 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager, Group, Permission
 from django.utils import timezone
 
+class Roles(models.TextChoices):
+    CUSTOMER = "customer", "клиент"
+    MANAGER = "manager", "менеджер"
+    ADMIN = "admin", "админ"
+    
+
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
@@ -31,7 +37,7 @@ class User(AbstractUser):
     first_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Имя")
     last_name  = models.CharField(max_length=100, blank=True, null=True, verbose_name="Фамилия")
     phone      = models.CharField(max_length=20, blank=True, null=True, verbose_name="Номер телефона")
-    role       = models.CharField(max_length=20, default="customer", verbose_name="Роль")
+    role       = models.CharField(max_length=20, choices=Roles.choices, default=Roles.CUSTOMER, verbose_name="Роль")
 
     is_active = models.BooleanField(default=True, verbose_name="Активен")
     email_verified = models.BooleanField(default=False, verbose_name="Почта подтверждена")

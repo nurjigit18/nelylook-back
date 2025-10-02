@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django import forms
+from django.db.models import Count
 from apps.core.admin_mixins import RoleBasedAdminMixin
 from .models import (
     Category, ClothingType, Product, ProductVariant, 
@@ -14,7 +15,7 @@ class CategoryAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     search_fields = ['category_name', 'description']
     ordering = ['display_order', 'category_name']
     
-    exclude = ('description', 'category_path')
+    exclude = ('is_active','description', 'category_path')
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -79,24 +80,32 @@ class ProductImageInline(admin.TabularInline):
     model = ProductImage
     form = ProductImageForm
     extra = 1
-    fields = [
-        'image_file',      # File upload field (NEW)    
-        'alt_text', 
-        'is_primary', 
-        'display_order', 
-    ]
-    readonly_fields = ['image_url']
+    fields = ['color', 'image_file', 'alt_text', 'is_primary', 'display_order', 'image_preview']
+    readonly_fields = ['image_preview']
     
-    def get_formset(self, request, obj=None, **kwargs):
-        formset = super().get_formset(request, obj, **kwargs)
-        # Add help text to the formset
-        return formset
+    def image_preview(self, obj):
+        if obj.image_url:
+            return format_html(
+                '<img src="{}" style="max-height: 50px; max-width: 100px;" />',
+                obj.image_url
+            )
+        return "Нет фото"
+    image_preview.short_description = 'Превью'
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "color":
+            # Only show colors that have variants for this product
+            if hasattr(request, '_obj'):
+                kwargs["queryset"] = Color.objects.filter(
+                    variants__product=request._obj
+                ).distinct()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 1
-    fields = ['sku', 'size', 'color', 'price', 'sale_price', 'stock_quantity', 'status']
+    fields = ['size', 'color', 'price', 'sale_price', 'stock_quantity', 'status']
     readonly_fields = ['sku']   # 🚀 Makes SKU non-editable
 
 
@@ -135,21 +144,27 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     
     inlines = [ProductVariantInline, ProductImageInline]
     
+    def color_count(self, obj):
+        count = obj.variants.values('color').distinct().count()
+        return f"{count} цветов"
+    color_count.short_description = 'Цвета'
+    
+    def image_count(self, obj):
+        count = obj.images.count()
+        if count > 0:
+            return format_html('✓ {} фото', count)
+        return format_html('<span style="color: orange;">Нет фото</span>')
+    image_count.short_description = 'Фото'
+    
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
             'category', 'clothing_type'
-        )
+        ).prefetch_related('images', 'variants')
     
-    def get_readonly_fields(self, request, obj=None):
-        readonly = list(self.readonly_fields)
-        
-        if not request.user.is_superuser:
-            if request.user.groups.filter(name='Product Managers').exists():
-                readonly.append('cost_price')
-            elif request.user.groups.filter(name='Content Managers').exists():
-                readonly.extend(['base_price', 'sale_price', 'cost_price'])
-                
-        return readonly
+    def get_form(self, request, obj=None, **kwargs):
+        # Store obj in request for use in inline
+        request._obj = obj
+        return super().get_form(request, obj, **kwargs)
 
 
 @admin.register(ProductVariant)
@@ -184,7 +199,7 @@ class ProductImageAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     """
     form = ProductImageForm
     list_display = [
-        'image_id', 'product', 'variant', 'image_type', 
+        'image_id', 'product', 'image_type', 
         'is_primary', 'display_order', 'image_preview'
     ]
     list_filter = ['image_type', 'is_primary', 'product__category']

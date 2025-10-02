@@ -120,7 +120,7 @@ class Collection(models.Model):
 class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
     product_name = models.CharField(max_length=255, verbose_name="Название модели")
-    product_code = models.CharField(max_length=20, unique=True, editable=False, blank=True, verbose_name="Код модели")
+    product_code = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Код модели")
     slug = models.SlugField(unique=True, max_length=255, verbose_name='URL-идентификатор')
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
     short_description = models.TextField(blank=True, null=True, verbose_name="Краткое описание")
@@ -147,7 +147,7 @@ class Product(models.Model):
     is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     is_new_arrival = models.BooleanField(default=False, verbose_name="Новое")
     is_bestseller = models.BooleanField(default=False, verbose_name="Популярное")
-    stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
+    stock_quantity = models.IntegerField(default=0, editable=False, verbose_name="В наличии")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE, verbose_name='Статус')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
@@ -212,21 +212,26 @@ class ProductVariant(models.Model):
         ordering = ['product', 'color', 'size']
     
     def save(self, *args, **kwargs):
+        # Check if this is a new instance
         is_new = self.pk is None
         
-        if self.stock_quantity <= 0:
-            self.status = Status.OUT_OF_STOCK
-        else:
-            if self.status == Status.OUT_OF_STOCK:
-                self.status = Status.ACTIVE
-                
-        super().save(*args, **kwargs)  # Save once to get PK
+        # Save first to get the primary key
+        super().save(*args, **kwargs)
+        
+        # Generate SKU only for new instances without a SKU
         if is_new and not self.sku:
-            self.sku = f"25{self.id:06d}"  # e.g. 000001, 000002
-            super().save(update_fields=["sku"])
-    
+            # Use variant_id instead of id since that's your primary key
+            self.sku = f"25{self.variant_id:06d}"  # e.g., 25000001, 25000002
+            super().save(update_fields=['sku'])
+
     def __str__(self):
-        return f"{self.product.product_name} - {self.color} - {self.size}"
+        parts = [str(self.product)]
+        if self.size:
+            parts.append(str(self.size))
+        if self.color:
+            parts.append(str(self.color))
+        return ' - '.join(parts)
+
 
 class ProductImage(models.Model):
     image_id = models.AutoField(primary_key=True)
@@ -234,16 +239,19 @@ class ProductImage(models.Model):
         'Product',
         on_delete=models.CASCADE,
         related_name='images',
-        blank=True, null=True,
+        null=True,
         verbose_name='Модель'
-    )    
-    variant = models.ForeignKey(
-        'ProductVariant',
-        on_delete=models.CASCADE,
-        related_name='images',
-        blank=True, null=True,
-        verbose_name='Вариация'
-    )    
+    )
+    
+    # Link to Color (required) - this is the key!
+    color = models.ForeignKey(
+        'Color',
+        on_delete=models.CASCADE, 
+        blank=True, 
+        null=True,
+        related_name='product_images',
+        verbose_name='Цвет'
+    )
     
     # NEW: File upload field - uploads to Supabase
     image_file = models.ImageField(
@@ -264,8 +272,8 @@ class ProductImage(models.Model):
     )
     
     alt_text = models.CharField(max_length=255, blank=True, null=True, verbose_name='Альтернативный текст')
-    is_primary = models.BooleanField(default=False, verbose_name='Основной')
-    display_order = models.IntegerField(default=1, verbose_name='Приоритет показа')
+    is_primary = models.BooleanField(default=False, verbose_name='Основное фото для этого цвета')
+    display_order = models.IntegerField(default=1, verbose_name='Порядок показа')
     image_type = models.CharField(max_length=20, choices=ImageFile.choices, default=ImageFile.PNG, verbose_name="Тип файла")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
 
@@ -273,7 +281,15 @@ class ProductImage(models.Model):
         db_table = 'product_images'
         verbose_name = 'Фото товара'
         verbose_name_plural = 'Фото товаров'
-        ordering = ['display_order']
+        ordering = ['product', 'color', 'display_order']
+        # Ensure each color has one primary image
+        constraints = [
+            models.UniqueConstraint(
+                fields=['product', 'color'],
+                condition=models.Q(is_primary=True),
+                name='one_primary_per_color'
+            )
+        ]
     
     def save(self, *args, **kwargs):
         """
@@ -287,7 +303,7 @@ class ProductImage(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"Фото для {self.product or self.variant}"
+        return f"{self.product.product_name} - {self.color.color_name}"
 
 
 class RelatedProduct(models.Model):
