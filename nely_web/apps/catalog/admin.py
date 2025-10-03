@@ -105,7 +105,7 @@ class ProductImageInline(admin.TabularInline):
 class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 1
-    fields = ['size', 'color', 'price', 'sale_price', 'stock_quantity', 'status']
+    fields = ['size', 'color', 'stock_quantity', 'status']
     readonly_fields = ['sku']   # 🚀 Makes SKU non-editable
 
 
@@ -128,17 +128,13 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
             'fields': ('product_name', 'product_code', 'slug', 'description', 'short_description')
         }),
         ('Категории', {
-            'fields': ('category', 'clothing_type', 'season', 'gender')
+            'fields': ('category', 'season')
         }),
         ('Цена', {
             'fields': ('base_price', 'sale_price', 'cost_price')
         }),
         ('Отметки', {
             'fields': ('is_featured', 'is_new_arrival', 'is_bestseller', 'status')
-        }),
-        ('Время и даты', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
         }),
     )
     
@@ -170,7 +166,7 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
 @admin.register(ProductVariant)
 class ProductVariantAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     list_display = [
-        'sku', 'product', 'size', 'color', 'price', 
+        'sku', 'product', 'size', 'color', 
         'stock_quantity', 'status'
     ]
     list_editable = ['stock_quantity',]

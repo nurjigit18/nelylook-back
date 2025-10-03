@@ -4,15 +4,11 @@ from apps.core.storage import SupabaseStorage
 import uuid
 
 class Season(models.TextChoices):
-    SPRING = "spring", "Spring"
-    SUMMER = "summer", "Summer"
-    AUTUMN = "autumn", "Autumn"
-    WINTER = "winter", "Winter"
-    ALL    = "all",    "All-season"
-
-class Gender(models.TextChoices):
-    WOMEN = "women", "Women"
-    MEN   = "men",   "Men"
+    SPRING = "spring", "Весная"
+    SUMMER = "summer", "Лето"
+    AUTUMN = "autumn", "Осень"
+    WINTER = "winter", "Зима"
+    ALL    = "all",    "Всесезон"
 
 class Status(models.TextChoices):
     DRAFT     = "draft", "Черновик"
@@ -140,7 +136,6 @@ class Product(models.Model):
     )
     
     season = models.CharField(max_length=10, choices=Season.choices, default=Season.ALL, verbose_name="Сезон")
-    gender = models.CharField(max_length=10, choices=Gender.choices, verbose_name="Пол")
     base_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Базовая цена")
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Цена по скидке")
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Расходная цена")
@@ -195,10 +190,6 @@ class ProductVariant(models.Model):
         related_name='variants',
         verbose_name='Цвет'
     )    
-    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
-    sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Цена по скидке")
-    weight = models.DecimalField(max_digits=8, decimal_places=3, blank=True, null=True)
-    dimensions = models.CharField(max_length=100, blank=True, null=True)
     barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="Баркод")
     stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
     low_stock_threshold = models.IntegerField(default=10, verbose_name="Мин. в наличии")
