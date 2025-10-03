@@ -57,7 +57,6 @@ class ProductSerializer(serializers.ModelSerializer):
 
     # nice human-readable labels for choices
     season_display = serializers.CharField(source="get_season_display", read_only=True)
-    gender_display = serializers.CharField(source="get_gender_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
@@ -68,7 +67,6 @@ class ProductSerializer(serializers.ModelSerializer):
             "category", "category_name",
             "clothing_type", "clothing_type_name",
             "season", "season_display",
-            "gender", "gender_display",
             "base_price", "sale_price", "cost_price",
             "is_featured", "is_new_arrival", "is_bestseller",
             "status", "status_display",

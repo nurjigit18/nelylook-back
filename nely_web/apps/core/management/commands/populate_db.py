@@ -354,7 +354,6 @@ class Command(BaseCommand):
                 category=category,
                 clothing_type=clothing_type,
                 season=random.choice(['spring', 'summer', 'autumn', 'winter', 'all']),
-                gender=random.choice(['women', 'men']),
                 base_price=base_price,
                 sale_price=base_price * Decimal('0.8') if random.choice([True, False]) else None,
                 cost_price=base_price * Decimal('0.6'),
