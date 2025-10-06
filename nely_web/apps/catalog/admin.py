@@ -152,10 +152,6 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
         return format_html('<span style="color: orange;">Нет фото</span>')
     image_count.short_description = 'Фото'
     
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            'category', 'clothing_type'
-        ).prefetch_related('images', 'variants')
     
     def get_form(self, request, obj=None, **kwargs):
         # Store obj in request for use in inline
@@ -209,7 +205,7 @@ class ProductImageAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
         }),
         ('Информация о фото', {
             'fields': (
-                'product', 'variant', 'image_url', 
+                'product', 'image_url', 
                 'alt_text', 'is_primary', 'display_order', 'image_type'
             )
         }),

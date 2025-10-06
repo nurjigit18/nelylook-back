@@ -212,14 +212,14 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.CustomPagination",
     "PAGE_SIZE": 20,
 
-    # Renderers
-    "DEFAULT_RENDERER_CLASSES": (
-        "rest_framework.renderers.JSONRenderer",
-        "rest_framework.renderers.BrowsableAPIRenderer",  # enable browsable UI in dev
-    ),
+    "DEFAULT_RENDERER_CLASSES": [
+        "apps.core.renderers.EnvelopeJSONRenderer",  # Custom envelope renderer
+        "rest_framework.renderers.BrowsableAPIRenderer",  # Keep for dev
+    ],
+    "EXCEPTION_HANDLER": "apps.core.exception_handler.custom_exception_handler",  # Custom exception handler
 
     # Throttles (must include base 'user' and 'anon' if classes enabled)
     "DEFAULT_THROTTLE_CLASSES": [

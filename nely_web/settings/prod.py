@@ -11,7 +11,7 @@ DEBUG = False
 
 if not DEBUG:
     REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
-        "rest_framework.renderers.JSONRenderer",
+        "apps.core.renderers.EnvelopeJSONRenderer",  # Only JSON in production
     ]
     
 ALLOWED_HOSTS = ["api.nelylook.com"]

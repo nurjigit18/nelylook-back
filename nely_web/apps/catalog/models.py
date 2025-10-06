@@ -142,7 +142,7 @@ class Product(models.Model):
     is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     is_new_arrival = models.BooleanField(default=False, verbose_name="Новое")
     is_bestseller = models.BooleanField(default=False, verbose_name="Популярное")
-    stock_quantity = models.IntegerField(default=0, editable=False, verbose_name="В наличии")
+    stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE, verbose_name='Статус')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")

@@ -13,6 +13,7 @@ from rest_framework_simplejwt.settings import api_settings as sjwt
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from apps.core.response_utils import APIResponse
 from .serializers import RegisterSerializer, MeSerializer, ChangePasswordSerializer
 
 User = get_user_model()
@@ -60,18 +61,60 @@ class RegisterView(generics.CreateAPIView):
         s.is_valid(raise_exception=True)
         user = s.save()
         logger.info(f"User registered: {user.email}")
-        return Response({"detail": "User registered successfully"}, status=status.HTTP_201_CREATED)
+        
+        return APIResponse.created(
+            data={"user_id": user.user_id, "email": user.email},
+            message="User registered successfully"
+        )
 
 
 class LoginView(TokenObtainPairView):
+    """
+    Login endpoint that returns access token, refresh token, and user data.
+    The response is automatically wrapped by EnvelopeJSONRenderer.
+    """
     permission_classes = [permissions.AllowAny]
     throttle_classes = [LoginBurstThrottle]
     serializer_class = CustomTokenObtainPairSerializer
+    
+    def post(self, request, *args, **kwargs):
+        """Override to add custom logging and better error messages."""
+        try:
+            response = super().post(request, *args, **kwargs)
+            # Log successful login
+            if response.status_code == 200:
+                email = request.data.get('email', 'unknown')
+                logger.info(f"Successful login: {email}")
+            return APIResponse.success(data=response.data, message="Login successful")
+        except Exception as e:
+            email = request.data.get('email', 'unknown')
+            logger.warning(f"Failed login attempt: {email}")
+            return APIResponse.success(data=response.data, message="Login successful")
+
 
 
 class RefreshView(TokenRefreshView):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [RefreshThrottle]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+            return APIResponse.success(
+                data=serializer.validated_data,
+                message="Token refreshed successfully"
+            )
+        except TokenError as e:
+            return APIResponse.unauthorized(
+                message="Invalid or expired refresh token"
+            )
+        except Exception as e:
+            return APIResponse.error(
+                message="An error occurred during token refresh",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 
 class LogoutView(APIView):
@@ -89,23 +132,34 @@ class LogoutView(APIView):
 
         if not raw:
             logger.warning(f"Logout attempt without refresh token from {email}")
-            return Response({"detail": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                message="Refresh token is required",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             RefreshToken(raw).blacklist()
             logger.info(f"Logged out: {email}")
-            return Response({"detail": "Successfully logged out"}, status=status.HTTP_200_OK)
+            return APIResponse.success(
+                message="Successfully logged out"
+            )
         except (TokenError, InvalidToken) as e:
             logger.warning(f"Invalid refresh on logout from {email}: {e}")
-            return Response({"detail": "Invalid or expired refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
+            return APIResponse.unauthorized(
+                message="Invalid or expired refresh token"
+            )
         except Exception as e:
             logger.exception(f"Logout failed for {email}: {e}")
-            return Response({"detail": "An error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return APIResponse.error(
+                message="An error occurred during logout",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class MeView(RetrieveUpdateAPIView):
     """
     Current user profile. GET, PATCH.
+    The response is automatically wrapped by EnvelopeJSONRenderer.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -114,10 +168,24 @@ class MeView(RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+    def retrieve(self, request, *args, **kwargs):
+        """Override to add custom message."""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        # The EnvelopeJSONRenderer will wrap this automatically
+        return APIResponse.success(
+            data=serializer.data,
+            message="Current user"
+        )
+
     def patch(self, request, *args, **kwargs):
+        """Override to add custom message and logging."""
         response = super().patch(request, *args, **kwargs)
         logger.info(f"Profile updated: {request.user.email}")
-        return response
+        return APIResponse.success(
+            data=serializer.data,
+            message="Profile updated successfully"
+        )
 
 
 class ChangePasswordView(GenericAPIView):
@@ -140,13 +208,20 @@ class ChangePasswordView(GenericAPIView):
         except Exception as e:
             logger.warning(f"Failed invalidating tokens after password change: {e}")
 
-        return Response({"detail": "Password changed. Please log in again."}, status=200)
+        return APIResponse.success(
+            message="Password changed successfully. Please log in again."
+        )
 
 
 class ValidateTokenView(APIView):
+    """
+    Validate if the current access token is valid.
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # your PK is user_id
-        return Response({"detail": "Token is valid", "user_id": getattr(request.user, "user_id")}, status=200)
+        return APIResponse.success(
+            data={"user_id": request.user.user_id},
+            message="Token is valid"
+        )
