@@ -232,7 +232,7 @@ class ValidateTokenView(APIView):
             data={"user_id": request.user.user_id},
             message="Token is valid"
         )
-        
+
 class SendVerificationEmailView(APIView):
     """Send email verification link to user"""
     permission_classes = [IsAuthenticated]
@@ -250,41 +250,50 @@ class SendVerificationEmailView(APIView):
         token = default_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         
-        # Create verification URL (adjust domain based on your frontend)
-        frontend_domain = settings.FRONTEND_URL or "https://nelylook.com"
+        # Create verification URL - ensure no trailing slash on domain
+        frontend_domain = (settings.FRONTEND_URL or "https://nelylook.com").rstrip('/')
         verification_url = f"{frontend_domain}/verify-email/{uid}/{token}/"
+        
+        logger.info(f"Attempting to send verification email to {user.email}")
+        logger.info(f"From email: {settings.DEFAULT_FROM_EMAIL}")
+        logger.info(f"Email backend: {settings.EMAIL_BACKEND}")
+        logger.info(f"SMTP Host: {settings.EMAIL_HOST}:{settings.EMAIL_PORT}")
         
         # Send email
         try:
-            send_mail(
+            result = send_mail(
                 subject='Verify Your Email - NelyLook',
                 message=f'''
-                Hello {user.first_name or 'there'},
-                
-                Please verify your email address by clicking the link below:
-                {verification_url}
-                
-                This link will expire in 24 hours.
-                
-                If you didn't create an account with NelyLook, please ignore this email.
-                
-                Best regards,
-                The NelyLook Team
+Hello {user.first_name or 'there'},
+
+Please verify your email address by clicking the link below:
+{verification_url}
+
+This link will expire in 24 hours.
+
+If you didn't create an account with NelyLook, please ignore this email.
+
+Best regards,
+The NelyLook Team
                 ''',
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
                 fail_silently=False,
             )
             
+            logger.info(f"Email send result: {result}")
+            
             return Response(
                 {"detail": "Verification email sent successfully."},
                 status=status.HTTP_200_OK
             )
         except Exception as e:
+            logger.error(f"Failed to send verification email: {str(e)}", exc_info=True)
             return Response(
                 {"detail": f"Failed to send email: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
 
 class VerifyEmailView(APIView):
     """Verify user's email using token from email link"""
@@ -301,14 +310,14 @@ class VerifyEmailView(APIView):
             )
         
         try:
-            # Decode user ID
             user_id = force_str(urlsafe_base64_decode(uid))
             user = User.objects.get(pk=user_id)
             
-            # Verify token
             if default_token_generator.check_token(user, token):
                 user.email_verified = True
                 user.save(update_fields=['email_verified'])
+                
+                logger.info(f"Email verified successfully for user {user.email}")
                 
                 return Response(
                     {"detail": "Email verified successfully!"},
@@ -320,16 +329,18 @@ class VerifyEmailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist) as e:
+            logger.error(f"Email verification failed: {str(e)}")
             return Response(
                 {"detail": "Invalid verification link."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
 class RequestPasswordResetView(APIView):
     """Send password reset email"""
     permission_classes = [AllowAny]
-    throttle_scope = 'login'  # reuse login throttle
+    throttle_scope = 'login'
     
     def post(self, request):
         email = request.data.get('email')
@@ -343,39 +354,42 @@ class RequestPasswordResetView(APIView):
         try:
             user = User.objects.get(email=email)
             
-            # Generate reset token
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             
-            # Create reset URL
             frontend_domain = settings.FRONTEND_URL or "https://nelylook.com"
             reset_url = f"{frontend_domain}/reset-password/{uid}/{token}/"
             
-            # Send email
+            logger.info(f"Attempting to send password reset email to {email}")
+            
             send_mail(
                 subject='Reset Your Password - NelyLook',
                 message=f'''
-                Hello {user.first_name or 'there'},
-                
-                You requested to reset your password. Click the link below to set a new password:
-                {reset_url}
-                
-                This link will expire in 24 hours.
-                
-                If you didn't request a password reset, please ignore this email or contact support if you're concerned.
-                
-                Best regards,
-                The NelyLook Team
+Hello {user.first_name or 'there'},
+
+You requested to reset your password. Click the link below to set a new password:
+{reset_url}
+
+This link will expire in 24 hours.
+
+If you didn't request a password reset, please ignore this email or contact support if you're concerned.
+
+Best regards,
+The NelyLook Team
                 ''',
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
                 fail_silently=False,
             )
             
+            logger.info(f"Password reset email sent to {email}")
+            
         except User.DoesNotExist:
-            pass  # Don't reveal if email exists or not (security)
+            logger.info(f"Password reset requested for non-existent email: {email}")
+            pass
+        except Exception as e:
+            logger.error(f"Failed to send password reset email: {str(e)}", exc_info=True)
         
-        # Always return success to prevent email enumeration
         return Response(
             {"detail": "If an account exists with this email, a password reset link has been sent."},
             status=status.HTTP_200_OK
@@ -411,6 +425,8 @@ class ResetPasswordView(APIView):
                 user.set_password(new_password)
                 user.save(update_fields=['password'])
                 
+                logger.info(f"Password reset successfully for user {user.email}")
+                
                 return Response(
                     {"detail": "Password reset successfully!"},
                     status=status.HTTP_200_OK
@@ -421,7 +437,8 @@ class ResetPasswordView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist) as e:
+            logger.error(f"Password reset failed: {str(e)}")
             return Response(
                 {"detail": "Invalid reset link."},
                 status=status.HTTP_400_BAD_REQUEST

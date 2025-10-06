@@ -107,14 +107,6 @@ if REDIS_URL:
 # Static files optimization for production
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files - configure for production storage if needed
-# Uncomment and configure if using cloud storage like AWS S3
-# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-# AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-# AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-# AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
-# AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
-
 # Production logging
 LOGGING['formatters']['production'] = {
     'format': '{levelname} {asctime} [{name}] {message}',
@@ -122,14 +114,6 @@ LOGGING['formatters']['production'] = {
 }
 
 LOGGING['handlers']['console']['formatter'] = 'production'
-
-# Add file handler for production if needed
-# LOGGING['handlers']['file'] = {
-#     'class': 'logging.FileHandler',
-#     'filename': BASE_DIR / 'logs' / 'django.log',
-#     'formatter': 'production',
-# }
-
 LOGGING['root']['level'] = 'WARNING'
 LOGGING['loggers']['django']['level'] = 'INFO'
 
@@ -151,3 +135,11 @@ if SENTRY_DSN:
         traces_sample_rate=0.1,
         send_default_pii=False
     )
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.sendgrid.net'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'apikey'  # Leave empty when using IP allowlist
+EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY')  # Leave empty
+DEFAULT_FROM_EMAIL = 'NelyLook <noreply@nelylook.com>'
