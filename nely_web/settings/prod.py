@@ -11,7 +11,7 @@ DEBUG = False
 
 if not DEBUG:
     REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
-        "apps.core.renderers.EnvelopeJSONRenderer",  # Only JSON in production
+        "rest_framework.renderers.JSONRenderer",
     ]
     
 ALLOWED_HOSTS = ["api.nelylook.com"]
@@ -68,6 +68,26 @@ SECURE_HSTS_SECONDS = 31536000  # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
+# ============================================
+# EMAIL SETTINGS FOR PRODUCTION (SendGrid)
+# ============================================
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.sendgrid.net'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'apikey'  # This is always 'apikey' for SendGrid
+EMAIL_HOST_PASSWORD = os.getenv('SENDGRID_API_KEY')  # Your actual SendGrid API key
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@nelylook.com')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Add timeout settings to prevent hanging connections
+EMAIL_TIMEOUT = 10
+
+# Log email configuration for debugging (without exposing sensitive data)
+if EMAIL_HOST_PASSWORD:
+    print("✅ SendGrid API key is configured")
+else:
+    print("❌ WARNING: SENDGRID_API_KEY environment variable is not set!")
 
 # Database settings - ensure connection pooling and SSL
 DATABASES['default'].update({
@@ -107,13 +127,29 @@ if REDIS_URL:
 # Static files optimization for production
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Production logging
+# Media files - configure for production storage if needed
+# Uncomment and configure if using cloud storage like AWS S3
+# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+# AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+# AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+# AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+
+# Production logging - enhanced for email debugging
 LOGGING['formatters']['production'] = {
     'format': '{levelname} {asctime} [{name}] {message}',
     'style': '{',
 }
 
 LOGGING['handlers']['console']['formatter'] = 'production'
+
+# Add specific logging for email sending
+LOGGING['loggers']['django.core.mail'] = {
+    'handlers': ['console'],
+    'level': 'DEBUG',  # This will help debug email issues
+    'propagate': False,
+}
+
 LOGGING['root']['level'] = 'WARNING'
 LOGGING['loggers']['django']['level'] = 'INFO'
 
@@ -135,11 +171,3 @@ if SENTRY_DSN:
         traces_sample_rate=0.1,
         send_default_pii=False
     )
-
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.sendgrid.net'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'apikey'  # Leave empty when using IP allowlist
-EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY')  # Leave empty
-DEFAULT_FROM_EMAIL = 'NelyLook <noreply@nelylook.com>'
