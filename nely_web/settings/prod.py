@@ -77,11 +77,20 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'apikey'  # This is always 'apikey' for SendGrid
 EMAIL_HOST_PASSWORD = os.getenv('SENDGRID_API_KEY')  # Your actual SendGrid API key
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@nelylook.com')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'NelyLook <noreply@nelylook.com>')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
 
+if not SENDGRID_API_KEY:
+    logger.warning("SENDGRID_API_KEY not set!")
+    
 # Add timeout settings to prevent hanging connections
-EMAIL_TIMEOUT = 10
+EMAIL_TIMEOUT = 30  # Increased timeout for Railway
+EMAIL_USE_SSL = False  # Use TLS instead of SSL
+
+# Additional SMTP settings for better reliability
+EMAIL_SSL_CERTFILE = None
+EMAIL_SSL_KEYFILE = None
 
 # Log email configuration for debugging (without exposing sensitive data)
 if EMAIL_HOST_PASSWORD:

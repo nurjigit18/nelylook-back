@@ -332,3 +332,4 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'apikey'  # Leave empty when using IP allowlist
 EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY')  # Leave empty
 DEFAULT_FROM_EMAIL = 'NelyLook <noreply@nelylook.com>'
+SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')

@@ -1,4 +1,5 @@
 import logging
+import traceback
 from django.conf import settings
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -18,9 +19,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from apps.core.response_utils import APIResponse
-
-
 from .models import User
+from .emails_utils import send_verification_email_sendgrid
 from .serializers import RegisterSerializer, MeSerializer, ChangePasswordSerializer
 
 User = get_user_model()
@@ -234,65 +234,51 @@ class ValidateTokenView(APIView):
         )
 
 class SendVerificationEmailView(APIView):
-    """Send email verification link to user"""
+    """Send email verification to authenticated user"""
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
         user = request.user
         
-        if user.email_verified:
-            return Response(
-                {"detail": "Email is already verified."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Generate verification token
-        token = default_token_generator.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        
-        # Create verification URL - ensure no trailing slash on domain
-        frontend_domain = (settings.FRONTEND_URL or "https://nelylook.com").rstrip('/')
-        verification_url = f"{frontend_domain}/verify-email/{uid}/{token}/"
-        
-        logger.info(f"Attempting to send verification email to {user.email}")
-        logger.info(f"From email: {settings.DEFAULT_FROM_EMAIL}")
-        logger.info(f"Email backend: {settings.EMAIL_BACKEND}")
-        logger.info(f"SMTP Host: {settings.EMAIL_HOST}:{settings.EMAIL_PORT}")
-        
-        # Send email
         try:
-            result = send_mail(
-                subject='Verify Your Email - NelyLook',
-                message=f'''
-Hello {user.first_name or 'there'},
-
-Please verify your email address by clicking the link below:
-{verification_url}
-
-This link will expire in 24 hours.
-
-If you didn't create an account with NelyLook, please ignore this email.
-
-Best regards,
-The NelyLook Team
-                ''',
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
+            # Generate verification token (implement your own logic)
+            verification_token = "YOUR_TOKEN_GENERATION_LOGIC"
+            verification_url = f"https://nelylook.com/verify?token={verification_token}"
+            
+            # Send email using SendGrid HTTP API
+            success, result = send_verification_email_sendgrid(
+                user_email=user.email,
+                user_name=user.first_name,
+                verification_url=verification_url
             )
             
-            logger.info(f"Email send result: {result}")
-            
-            return Response(
-                {"detail": "Verification email sent successfully."},
-                status=status.HTTP_200_OK
-            )
+            if success:
+                return Response(
+                    {
+                        "message": "Verification email sent successfully",
+                        "status_code": result
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "error": "Failed to send verification email",
+                        "details": result
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
         except Exception as e:
-            logger.error(f"Failed to send verification email: {str(e)}", exc_info=True)
+            logger.error(f"Unexpected error: {str(e)}")
             return Response(
-                {"detail": f"Failed to send email: {str(e)}"},
+                {
+                    "error": "An unexpected error occurred",
+                    "details": str(e)
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
 
 
 class VerifyEmailView(APIView):
