@@ -81,3 +81,77 @@ The NelyLook Team
         import traceback
         logger.error(f"Traceback:\n{traceback.format_exc()}")
         return False, str(e)
+
+def send_password_reset_email_sendgrid(user_email, user_name, reset_url):
+    """
+    Send password reset email using SendGrid HTTP API.
+    Returns (True, response.status_code) on success or (False, error_str) on failure.
+    """
+    try:
+        logger.info(f"Sending password reset email to {user_email} via SendGrid HTTP API")
+
+        from_email = Email("noreply@nelylook.com", "NelyLook")
+        to_email = To(user_email)
+        subject = "Reset Your Password - NelyLook"
+
+        plain_content = f"""
+Hello {user_name or user_email},
+
+You requested to reset your password. Click the link below to set a new password:
+{reset_url}
+
+This link will expire in 24 hours.
+
+If you didn't request a password reset, please ignore this email.
+
+Best regards,
+The NelyLook Team
+        """
+
+        html_content = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #2c3e50;">Reset Your Password</h2>
+        <p>Hello {user_name or user_email},</p>
+        <p>You (or someone using this email) requested to reset your password. Click the button below to set a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{reset_url}" 
+               style="background-color: #3498db; color: white; padding: 12px 30px; 
+                      text-decoration: none; border-radius: 5px; display: inline-block;">
+                Reset password
+            </a>
+        </div>
+        <p>Or copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #7f8c8d;">{reset_url}</p>
+        <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">
+            If you didn't request a password reset, please ignore this email.
+        </p>
+    </div>
+</body>
+</html>
+        """
+
+        message = Mail(
+            from_email=from_email,
+            to_emails=to_email,
+            subject=subject,
+            plain_text_content=plain_content,
+            html_content=html_content
+        )
+
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        response = sg.send(message)
+
+        logger.info(f"✅ Password reset email sent. Status: {response.status_code}")
+        logger.debug(f"Response headers: {response.headers}")
+
+        return True, response.status_code
+
+    except Exception as e:
+        logger.error(f"❌ Failed to send password reset email via SendGrid API: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        return False, str(e)
+

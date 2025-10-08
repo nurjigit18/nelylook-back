@@ -3,6 +3,7 @@ import traceback
 from django.conf import settings
 from django.utils import timezone
 from django.core.mail import send_mail
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.contrib.auth import get_user_model
@@ -20,11 +21,12 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from apps.core.response_utils import APIResponse
 from .models import User
-from .emails_utils import send_verification_email_sendgrid
+from .emails_utils import send_verification_email_sendgrid, send_password_reset_email_sendgrid
 from .serializers import RegisterSerializer, MeSerializer, ChangePasswordSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+signer = TimestampSigner(salt="email-verification")
 
 
 # ---- Throttles (scoped) ----
@@ -241,21 +243,21 @@ class SendVerificationEmailView(APIView):
         user = request.user
         
         try:
-            # Generate verification token (implement your own logic)
-            verification_token = "YOUR_TOKEN_GENERATION_LOGIC"
+            # 1️⃣ Generate a signed token with user ID
+            verification_token = signer.sign(str(user.id))
             verification_url = f"https://nelylook.com/verify?token={verification_token}"
             
-            # Send email using SendGrid HTTP API
+            # 2️⃣ Send email using SendGrid
             success, result = send_verification_email_sendgrid(
                 user_email=user.email,
-                user_name=user.first_name,
+                user_name=user.first_name or "User",
                 verification_url=verification_url
             )
             
             if success:
                 return Response(
                     {
-                        "message": "Verification email sent successfully",
+                        "status": "success", "message": "Verification email sent successfully",
                         "status_code": result
                     },
                     status=status.HTTP_200_OK
@@ -263,7 +265,7 @@ class SendVerificationEmailView(APIView):
             else:
                 return Response(
                     {
-                        "error": "Failed to send verification email",
+                        "status": "error", "error": "Failed to send verification email",
                         "details": result
                     },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -273,7 +275,46 @@ class SendVerificationEmailView(APIView):
             logger.error(f"Unexpected error: {str(e)}")
             return Response(
                 {
-                    "error": "An unexpected error occurred",
+                    "status": "error", "error": "An unexpected error occurred",
+                    "details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class VerifyEmailView(APIView):
+    """Verify user email token"""
+    def get(self, request):
+        token = request.query_params.get("token")
+        if not token:
+            return Response({"status": "error", "error": "missing token", "message": "Token is missing"}, status=400)
+        
+        try:
+            # 1️⃣ Validate and extract user ID
+            user_id = signer.unsign(token, max_age=60 * 60 * 24)  # expires in 24 hours
+            
+            # 2️⃣ Mark user as verified
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user = User.objects.filter(id=user_id).first()
+            if not user:
+                return Response({"status": "error", "error": "Invalid user"}, status=404)
+            
+            user.is_verified = True  # or `user.email_verified = True`
+            user.save(update_fields=["is_verified"])
+            
+            return Response({"status": "success", "message": "Email verified successfully"}, status=200)
+        
+        except SignatureExpired:
+            return Response({"status": "error", "error": "Token expired"}, status=400)
+        except BadSignature:
+            return Response({"status": "error", "error": "Invalid token"}, status=400)
+        except Exception as e:
+            logger.exception("Unexpected error verifying email")
+            return Response(
+                {
+                    "status": "error",
+                    "error": "unexpected_error",
+                    "message": "An unexpected error occurred",
                     "details": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -281,105 +322,66 @@ class SendVerificationEmailView(APIView):
 
 
 
-class VerifyEmailView(APIView):
-    """Verify user's email using token from email link"""
-    permission_classes = [AllowAny]
-    
-    def post(self, request):
-        uid = request.data.get('uid')
-        token = request.data.get('token')
-        
-        if not uid or not token:
-            return Response(
-                {"detail": "Missing uid or token."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            user_id = force_str(urlsafe_base64_decode(uid))
-            user = User.objects.get(pk=user_id)
-            
-            if default_token_generator.check_token(user, token):
-                user.email_verified = True
-                user.save(update_fields=['email_verified'])
-                
-                logger.info(f"Email verified successfully for user {user.email}")
-                
-                return Response(
-                    {"detail": "Email verified successfully!"},
-                    status=status.HTTP_200_OK
-                )
-            else:
-                return Response(
-                    {"detail": "Invalid or expired token."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-                
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist) as e:
-            logger.error(f"Email verification failed: {str(e)}")
-            return Response(
-                {"detail": "Invalid verification link."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
 
 class RequestPasswordResetView(APIView):
     """Send password reset email"""
     permission_classes = [AllowAny]
     throttle_scope = 'login'
-    
+
     def post(self, request):
-        email = request.data.get('email')
-        
+        email = (request.data.get('email') or "").strip()
         if not email:
             return Response(
-                {"detail": "Email is required."},
+                {"status": "error", "error": "Email is required.", "error": {"field": "email"}},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
-            user = User.objects.get(email=email)
-            
+            user = User.objects.filter(email__iexact=email).first()
+            if not user:
+                # Keep response identical whether user exists or not (avoid enumeration).
+                logger.info("Password reset requested for non-existent email: %s", email)
+                return Response(
+                    {"status": "success", "message": "If an account exists with this email, a password reset link has been sent."},
+                    status=status.HTTP_200_OK
+                )
+
+            # Generate token + uid
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
-            
-            frontend_domain = settings.FRONTEND_URL or "https://nelylook.com"
-            reset_url = f"{frontend_domain}/reset-password/{uid}/{token}/"
-            
-            logger.info(f"Attempting to send password reset email to {email}")
-            
-            send_mail(
-                subject='Reset Your Password - NelyLook',
-                message=f'''
-Hello {user.first_name or 'there'},
 
-You requested to reset your password. Click the link below to set a new password:
-{reset_url}
+            frontend_domain = getattr(settings, "FRONTEND_URL", "https://nelylook.com")
+            reset_url = f"{frontend_domain.rstrip('/')}/reset-password/{uid}/{token}/"
 
-This link will expire in 24 hours.
+            logger.info("Attempting to send password reset email to %s (user id=%s)", email, user.pk)
 
-If you didn't request a password reset, please ignore this email or contact support if you're concerned.
-
-Best regards,
-The NelyLook Team
-                ''',
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
+            success, result = send_password_reset_email_sendgrid(
+                user_email=user.email,
+                user_name=user.first_name or user.get_full_name() or "there",
+                reset_url=reset_url
             )
-            
-            logger.info(f"Password reset email sent to {email}")
-            
-        except User.DoesNotExist:
-            logger.info(f"Password reset requested for non-existent email: {email}")
-            pass
+
+            if success:
+                # Return success envelope with provider status code (useful for debugging)
+                return Response(
+                    {"status": "success", "message": "Password reset email sent successfully.", "status_code": result},
+                    status=status.HTTP_200_OK
+                )
+            else:
+                # Log details and return 500 so you notice the sending issue in client/dev.
+                logger.error("Failed to send password reset email to %s: %s", email, result)
+                return Response(
+                    {"status": "error", "error": "Failed to send password reset email.", "details": result},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
         except Exception as e:
-            logger.error(f"Failed to send password reset email: {str(e)}", exc_info=True)
-        
-        return Response(
-            {"detail": "If an account exists with this email, a password reset link has been sent."},
-            status=status.HTTP_200_OK
-        )
+            logger.exception("Unexpected error while handling password reset for %s", email)
+            return Response(
+                {"status": "error", "error": "An unexpected error occurred.", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 
 class ResetPasswordView(APIView):
@@ -393,13 +395,13 @@ class ResetPasswordView(APIView):
         
         if not all([uid, token, new_password]):
             return Response(
-                {"detail": "Missing required fields."},
+                {"status": "error", "error": "Missing required fields.", "status_code": result},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         if len(new_password) < 8:
             return Response(
-                {"detail": "Password must be at least 8 characters long."},
+                {"status": "error", "error": "Password must be at least 8 characters long.", "status_code": result},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -414,18 +416,18 @@ class ResetPasswordView(APIView):
                 logger.info(f"Password reset successfully for user {user.email}")
                 
                 return Response(
-                    {"detail": "Password reset successfully!"},
+                    {"status": "success", "message": "Password reset successfully.", "status_code": result},
                     status=status.HTTP_200_OK
                 )
             else:
                 return Response(
-                    {"detail": "Invalid or expired token."},
+                    {"status": "error", "error": "Invalid or missing token.", "status_code": result},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
         except (TypeError, ValueError, OverflowError, User.DoesNotExist) as e:
             logger.error(f"Password reset failed: {str(e)}")
             return Response(
-                {"detail": "Invalid reset link."},
+                {"status": "error", "error": "Invalid reset link.", "status_code": result},
                 status=status.HTTP_400_BAD_REQUEST
             )
