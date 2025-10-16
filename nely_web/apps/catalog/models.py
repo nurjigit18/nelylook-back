@@ -132,7 +132,9 @@ class Product(models.Model):
         ClothingType, 
         on_delete=models.PROTECT, 
         related_name='products',
-        verbose_name='Тип одежды'
+        verbose_name='Тип одежды',
+        null=True,
+        blank=True
     )
     
     season = models.CharField(max_length=10, choices=Season.choices, default=Season.ALL, verbose_name="Сезон")
