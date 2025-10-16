@@ -128,7 +128,7 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
             'fields': ('product_name', 'product_code', 'slug', 'description', 'short_description')
         }),
         ('Категории', {
-            'fields': ('category', 'season')
+            'fields': ('category', 'clothing_type', 'season')
         }),
         ('Цена', {
             'fields': ('base_price', 'sale_price', 'cost_price')
