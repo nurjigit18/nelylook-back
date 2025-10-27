@@ -5,14 +5,14 @@ from .models import User, UserAddress
 
 @admin.register(User)
 class UserAdmin(RoleBasedAdminMixin, BaseUserAdmin):
-    list_display = ['email', 'first_name', 'last_name', 'role', 'is_active', 'email_verified', 'created_at']
+    list_display = ['email', 'first_name', 'role', 'is_active', 'email_verified', 'created_at']
     list_filter = ['role', 'is_active', 'email_verified', 'is_staff', 'is_superuser']
-    search_fields = ['email', 'first_name', 'last_name']
+    search_fields = ['email', 'first_name']
     ordering = ['-created_at']
     
     fieldsets = (
         (None, {'fields': ('email',)}),
-        ('Personal info', {'fields': ('first_name', 'last_name', 'phone')}),
+        ('Personal info', {'fields': ('first_name', 'phone')}),
         ('Permissions', {
             'fields': ('role', 'is_active', 'is_staff', 'is_superuser', 'email_verified'),
         }),
@@ -22,7 +22,7 @@ class UserAdmin(RoleBasedAdminMixin, BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'password1', 'password2', 'first_name', 'last_name', 'role'),
+            'fields': ('email', 'password1', 'password2', 'first_name', 'role'),
         }),
     )
     readonly_fields = ['created_at', 'updated_at']

@@ -35,7 +35,6 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
 
     first_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Имя")
-    last_name  = models.CharField(max_length=100, blank=True, null=True, verbose_name="Фамилия")
     phone      = models.CharField(max_length=20, blank=True, null=True, verbose_name="Номер телефона")
     role       = models.CharField(max_length=20, choices=Roles.choices, default=Roles.CUSTOMER, verbose_name="Роль")
 
