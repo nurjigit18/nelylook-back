@@ -4,6 +4,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django_filters.rest_framework import DjangoFilterBackend
+from .filters import ProductFilter
 
 from apps.core.response_utils import APIResponse
 from .models import (
@@ -212,25 +213,13 @@ class CollectionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for products with advanced filtering, search, and ordering.
-    
-    List: GET /catalog/products/
-    Retrieve: GET /catalog/products/{id}/
-    Search: GET /catalog/products/?search=shirt
-    Filter: GET /catalog/products/?category=1&season=summer
-    Featured: GET /catalog/products/featured/
-    New Arrivals: GET /catalog/products/new-arrivals/
-    Bestsellers: GET /catalog/products/bestsellers/
-    Related: GET /catalog/products/{id}/related/
-    """
     queryset = Product.objects.filter(status='active')
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
     lookup_field = 'product_id'
     
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = ProductFilter  # Custom filter class
+    filterset_class = ProductFilter
     search_fields = ['product_name', 'description', 'product_code']
     ordering_fields = ['created_at', 'base_price', 'product_name', 'stock_quantity']
     ordering = ['-created_at']
@@ -239,17 +228,37 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         """Optimized queryset with prefetching."""
         qs = super().get_queryset()
         
+        # ✅ Add slug filtering support
+        slug = self.request.query_params.get('slug')
+        if slug:
+            logger.info(f"Filtering products by slug: {slug}")
+            qs = qs.filter(slug=slug)
+        
         # Prefetch related data for efficiency
         qs = qs.select_related('category', 'clothing_type')
         
-        # Add prefetch for variants and images if detail view
-        if self.action == 'retrieve':
+        # Add prefetch for variants and images if detail view or slug lookup
+        if self.action == 'retrieve' or slug:
             qs = qs.prefetch_related(
                 Prefetch('variants', queryset=ProductVariant.objects.select_related('size', 'color')),
                 Prefetch('images', queryset=ProductImage.objects.select_related('color').order_by('display_order'))
             )
         
         return qs
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to add logging"""
+        slug = request.query_params.get('slug')
+        if slug:
+            logger.info(f"📍 List action with slug filter: {slug}")
+        
+        response = super().list(request, *args, **kwargs)
+        
+        if slug:
+            logger.info(f"📦 Returned {len(response.data.get('results', []))} products for slug: {slug}")
+        
+        return response
+
     
     def get_serializer_class(self):
         """Use detailed serializer for retrieve action."""
@@ -271,13 +280,45 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'], url_path='new-arrivals')
     def new_arrivals(self, request):
         """Get new arrival products."""
-        products = self.get_queryset().filter(is_new_arrival=True).order_by('-created_at')[:20]
-        serializer = self.get_serializer(products, many=True)
-        
-        return APIResponse.success(
-            data=serializer.data,
-            message="New arrivals"
-        )
+        try:
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            logger.info("🔍 Fetching new arrivals...")
+            
+            # Get products
+            products = self.get_queryset().filter(is_new_arrival=True).order_by('-created_at')[:20]
+            logger.info(f"📦 Found {products.count()} products")
+            
+            # Serialize
+            logger.info("🔄 Serializing products...")
+            serializer = self.get_serializer(products, many=True)
+            
+            logger.info("✅ Serialization complete")
+            data = serializer.data
+            logger.info(f"📊 Serialized {len(data)} products")
+            
+            return APIResponse.success(
+                data=data,
+                message="New arrivals"
+            )
+        except Exception as e:
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Log the full error
+            logger.error("❌ Error in new_arrivals:")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error("Full traceback:")
+            logger.error(traceback.format_exc())
+            
+            return APIResponse.error(
+                message=f"Error fetching new arrivals: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=False, methods=['get'])
     def bestsellers(self, request):
@@ -408,4 +449,38 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 'seasons': [{'value': choice[0], 'label': choice[1]} for choice in Product._meta.get_field('season').choices],
             },
             message="Available filter options"
+        )
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieve product by slug instead of product_id
+        """
+        slug = kwargs.get('product_id')  # The URL parameter is still called product_id
+        
+        try:
+            # Try to get by slug first
+            instance = Product.objects.select_related(
+                'category', 'clothing_type'
+            ).prefetch_related(
+                Prefetch('variants', queryset=ProductVariant.objects.select_related('size', 'color')),
+                Prefetch('images', queryset=ProductImage.objects.select_related('color').order_by('display_order'))
+            ).get(slug=slug, status='active')
+        except Product.DoesNotExist:
+            # Fallback to product_id if slug doesn't work
+            try:
+                instance = Product.objects.select_related(
+                    'category', 'clothing_type'
+                ).prefetch_related(
+                    Prefetch('variants', queryset=ProductVariant.objects.select_related('size', 'color')),
+                    Prefetch('images', queryset=ProductImage.objects.select_related('color').order_by('display_order'))
+                ).get(product_id=slug, status='active')
+            except (Product.DoesNotExist, ValueError):
+                return APIResponse.error(
+                    message="Product not found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+        
+        serializer = self.get_serializer(instance)
+        return APIResponse.success(
+            data=serializer.data,
+            message=f"Product details: {instance.product_name}"
         )

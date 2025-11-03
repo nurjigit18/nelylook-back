@@ -1,0 +1,84 @@
+/* static/admin/css/product_admin_custom.css */
+
+/* Highlight the variants section */
+#productvariant_set-group {
+    background-color: #e8f5e9;
+    border: 2px solid #4caf50;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+#productvariant_set-group .inline-group-title {
+    background-color: #4caf50;
+    color: white;
+    padding: 10px;
+    border-radius: 4px 4px 0 0;
+    font-weight: bold;
+}
+
+/* Add warning banner for images section */
+#productimage_set-group::before {
+    content: "⚠️ ВАЖНО: Сначала добавьте вариации с цветами ниже, затем загружайте фото для каждого цвета.";
+    display: block;
+    background-color: #fff3cd;
+    border: 2px solid #ffc107;
+    color: #856404;
+    padding: 12px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+/* Style the image inline section */
+#productimage_set-group {
+    background-color: #fff8e1;
+    border: 2px solid #ffc107;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 20px;
+}
+
+/* Make readonly fields more obvious */
+input[readonly] {
+    background-color: #f5f5f5 !important;
+    cursor: not-allowed;
+}
+
+/* Add visual separator between inlines */
+.inline-group {
+    margin-bottom: 30px;
+}
+
+/* Style help text */
+.help {
+    font-style: italic;
+    color: #666;
+    font-size: 12px;
+}
+
+/* Highlight required fields */
+.required label::after {
+    content: " *";
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Better spacing for inline tables */
+.tabular tr.has_original td {
+    padding: 10px 8px;
+}
+
+/* Image preview styling */
+.inline-related td img {
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    transition: transform 0.2s;
+}
+
+.inline-related td img:hover {
+    transform: scale(1.5);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    z-index: 1000;
+    position: relative;
+}

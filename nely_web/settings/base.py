@@ -50,6 +50,8 @@ if DEBUG:
     CSRF_TRUSTED_ORIGINS = [
         "http://127.0.0.1:8000",
         "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
     ]
 else:
     env_csrf = [
@@ -61,15 +63,15 @@ else:
 
 # Frontend origins (Vercel, etc.) for CORS (comma-separated, with scheme)
 # Example: FRONTEND_ORIGINS=https://your-frontend.vercel.app,https://www.example.com
-# FRONTEND_ORIGINS = [
-#     o.strip() for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()
-# ]
+FRONTEND_ORIGINS = [
+    o.strip() for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()
+]
 
-# CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS if not DEBUG else [
-#     "http://127.0.0.1:3000",
-#     "http://localhost:3000",
-# ]
-# CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS if not DEBUG else [
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+]
+CORS_ALLOW_CREDENTIALS = True
 
 # --- Applications ---
 INSTALLED_APPS = [
@@ -264,7 +266,7 @@ SUPABASE_BUCKET_NAME = os.getenv('SUPABASE_BUCKET', 'products')
 
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,

@@ -80,7 +80,6 @@ class UserAddress(models.Model):
     user = models.ForeignKey('authentication.User', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Пользователь")
     address_type = models.CharField(max_length=20, blank=True, null=True, db_comment='Billing, Shipping, Both')
     first_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Имя")
-    last_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Фамилия")
     address_line1 = models.CharField(max_length=255, verbose_name="Адресс 1")
     address_line2 = models.CharField(max_length=255, blank=True, null=True, verbose_name="Адресс 2")
     city = models.CharField(max_length=100, verbose_name="Город")

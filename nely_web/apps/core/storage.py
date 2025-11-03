@@ -92,14 +92,18 @@ class SupabaseStorage(Storage):
     def url(self, name):
         """
         Return public URL for the file
+        ⚠️ FIXED: Properly handles the upload_to path
         """
         try:
-            # Get public URL
-            response = self.client.storage.from_(self.bucket_name).get_public_url(name)
+            # Ensure name doesn't have leading slash
+            clean_name = name.lstrip('/')
+            # Get public URL using Supabase client
+            response = self.client.storage.from_(self.bucket_name).get_public_url(clean_name)
             return response
         except Exception as e:
             # Fallback to constructed URL
-            return f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{name}"
+            clean_name = name.lstrip('/')
+            return f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{clean_name}"
     
     def size(self, name):
         """

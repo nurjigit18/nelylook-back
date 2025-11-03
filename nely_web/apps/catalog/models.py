@@ -155,16 +155,20 @@ class Product(models.Model):
         ordering = ['-created_at']
     
     def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        if self.stock_quantity <= 0:
-            self.status = Status.OUT_OF_STOCK
-        else:
-            if self.status == Status.OUT_OF_STOCK:
-                self.status = Status.ACTIVE
+        # Auto-generate slug if not provided
+        if not self.slug and self.product_name:
+            from django.utils.text import slugify
+            base_slug = slugify(self.product_name)
+            slug = base_slug
+            counter = 1
+            
+            while Product.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            
+            self.slug = slug
+        
         super().save(*args, **kwargs)
-        if is_new and not self.product_code:
-            self.product_code = f"NL-{self.product_id:06d}"
-            super().save(update_fields=['product_code'])
 
     def __str__(self):
         return self.product_name
@@ -291,7 +295,7 @@ class ProductImage(models.Model):
         if self.image_file and not self.image_url:
             # Get the public URL from Supabase
             storage = SupabaseStorage()
-            self.image_url = storage.url(self.image_file.name)
+            self.image_url = self.image_file.storage.url(self.image_file.name)
         
         super().save(*args, **kwargs)
     

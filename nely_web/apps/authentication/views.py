@@ -1,5 +1,7 @@
 import logging
 import traceback
+from rest_framework.exceptions import ValidationError
+from django.db import IntegrityError, DatabaseError
 from django.conf import settings
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -66,15 +68,91 @@ class RegisterView(generics.CreateAPIView):
     throttle_classes = [RegisterThrottle]
 
     def create(self, request, *args, **kwargs):
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        user = s.save()
-        logger.info(f"User registered: {user.email}")
-        
-        return APIResponse.created(
-            data={"user_id": user.user_id, "email": user.email},
-            message="User registered successfully"
-        )
+        try:
+            logger.info(f"Registration attempt for email: {request.data.get('email', 'N/A')}")
+            
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.save()
+            
+            logger.info(f"User registered successfully: {user.email} (ID: {user.user_id})")
+            
+            # Automatically send verification email
+            try:
+                verification_token = signer.sign(str(user.id))
+                verification_url = f"https://nelylook.com/verify?token={verification_token}"
+                
+                success, result = send_verification_email_sendgrid(
+                    user_email=user.email,
+                    user_name=user.first_name or "User",
+                    verification_url=verification_url
+                )
+                
+                if not success:
+                    logger.warning(f"Failed to send verification email: {result}")
+            except Exception as e:
+                logger.error(f"Error sending verification email: {str(e)}")
+
+            
+            return Response({
+                "status": "success",
+                "message": "User registered successfully. Verification email sent.",
+                "data": {
+                    "user_id": user.user_id,
+                    "email": user.email,
+                    "first_name": user.first_name
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except ValidationError as e:
+            logger.warning(f"Registration validation failed: {e.detail}")
+            
+            errors = {}
+            if isinstance(e.detail, dict):
+                for field, messages in e.detail.items():
+                    if isinstance(messages, list):
+                        errors[field] = [str(msg) for msg in messages]
+                    else:
+                        errors[field] = [str(messages)]
+            elif isinstance(e.detail, list):
+                errors['detail'] = [str(msg) for msg in e.detail]
+            else:
+                errors['detail'] = [str(e.detail)]
+            
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except IntegrityError as e:
+            logger.error(f"IntegrityError during registration: {str(e)}", exc_info=True)
+            
+            return Response({
+                "status": "error",
+                "message": "User with this email or phone already exists",
+                "errors": {"detail": ["A user with these credentials already exists."]}
+            }, status=status.HTTP_409_CONFLICT)
+            
+        except DatabaseError as e:
+            logger.error(f"DatabaseError during registration: {str(e)}", exc_info=True)
+            
+            return Response({
+                "status": "error",
+                "message": "Database error. Please try again later.",
+                "errors": {"detail": ["Unable to complete registration at this time."]}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error during registration: {str(e)}", exc_info=True)
+            
+            return Response({
+                "status": "error",
+                "message": "An unexpected error occurred",
+                "errors": {"detail": [str(e)]}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 class LoginView(TokenObtainPairView):
@@ -395,13 +473,13 @@ class ResetPasswordView(APIView):
         
         if not all([uid, token, new_password]):
             return Response(
-                {"status": "error", "error": "Missing required fields.", "status_code": result},
+                {"status": "error", "error": "Missing required fields."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         if len(new_password) < 8:
             return Response(
-                {"status": "error", "error": "Password must be at least 8 characters long.", "status_code": result},
+                {"status": "error", "error": "Password must be at least 8 characters long."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -416,18 +494,18 @@ class ResetPasswordView(APIView):
                 logger.info(f"Password reset successfully for user {user.email}")
                 
                 return Response(
-                    {"status": "success", "message": "Password reset successfully.", "status_code": result},
+                    {"status": "success", "message": "Password reset successfully."},
                     status=status.HTTP_200_OK
                 )
             else:
                 return Response(
-                    {"status": "error", "error": "Invalid or missing token.", "status_code": result},
+                    {"status": "error", "error": "Invalid or missing token."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
         except (TypeError, ValueError, OverflowError, User.DoesNotExist) as e:
             logger.error(f"Password reset failed: {str(e)}")
             return Response(
-                {"status": "error", "error": "Invalid reset link.", "status_code": result},
+                {"status": "error", "error": "Invalid reset link."},
                 status=status.HTTP_400_BAD_REQUEST
             )
