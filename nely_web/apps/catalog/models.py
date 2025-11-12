@@ -282,8 +282,9 @@ class ProductImage(models.Model):
         verbose_name='Цвет'
     )
     
+    # File upload field
     image_file = models.ImageField(
-        upload_to='',
+        upload_to='',  # Empty = root directory
         storage=SupabaseStorage,
         blank=True,
         null=True,
@@ -291,6 +292,7 @@ class ProductImage(models.Model):
         help_text='Загрузите фото (будет сохранено в Supabase)'
     )
     
+    # URL field (auto-populated)
     image_url = models.URLField(
         max_length=500, 
         blank=True,
@@ -319,21 +321,27 @@ class ProductImage(models.Model):
     
     def save(self, *args, **kwargs):
         """
-        Override save to automatically populate image_url from uploaded file
+        Override save to automatically populate image_url from uploaded file.
+        Handles both new uploads and existing files.
         """
-        if self.image_file and not self.image_url:
-            # Get the public URL from Supabase
-            storage = SupabaseStorage()
-            # Get just the filename without any path prefix
+        if self.image_file:
+            # Get the filename from image_file (which may contain 'products/' prefix)
             filename = self.image_file.name
+            
+            # Remove any directory prefix (e.g., 'products/')
             if '/' in filename:
-                filename = filename.split('/')[-1]  # Get last part after slash
+                filename = filename.split('/')[-1]
+            
+            # Generate the public URL using just the filename
+            from apps.core.storage import SupabaseStorage
+            storage = SupabaseStorage()
             self.image_url = storage.url(filename)
         
         super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.product.product_name} - {self.color.color_name if self.color else 'No color'}"
+
 
 
 
