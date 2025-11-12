@@ -14,3 +14,4 @@ supabase
 pillow
 django-nested-admin
 sendgrid
+unidecode
