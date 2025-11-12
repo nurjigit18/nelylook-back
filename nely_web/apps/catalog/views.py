@@ -1,10 +1,10 @@
 # apps/catalog/views.py
-from django.db.models import Q, Prefetch, Count, Min, Max
+import logging
+from django.db.models import Q, F, Prefetch, Count, Min, Max
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
-from .filters import ProductFilter
 
 from apps.core.response_utils import APIResponse
 from .models import (
@@ -16,47 +16,36 @@ from .serializers import (
     ProductSerializer, ProductDetailSerializer,
     CategorySerializer, ClothingTypeSerializer,
     CollectionSerializer, ColorSerializer, SizeSerializer,
+    ProductVariantSerializer
 )
-from .filters import ProductFilter  # We'll create this
+from .filters import ProductFilter
+
+logger = logging.getLogger(__name__)
 
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for categories.
-    
-    List: GET /catalog/categories/
-    Retrieve: GET /catalog/categories/{id}/
-    Get products in category: GET /catalog/categories/{id}/products/
-    """
     queryset = Category.objects.filter(is_active=True)
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
     lookup_field = 'category_id'
+    pagination_class = None
     
     def get_queryset(self):
-        """Filter to show only active categories, with optional parent filter."""
         qs = super().get_queryset()
-        
-        # Filter by parent category
         parent_id = self.request.query_params.get('parent')
         if parent_id:
             qs = qs.filter(parent_category_id=parent_id)
-        
-        # Get root categories only (no parent)
         if self.request.query_params.get('root_only') == 'true':
             qs = qs.filter(parent_category__isnull=True)
-        
         return qs.order_by('display_order', 'category_name')
     
     @action(detail=True, methods=['get'])
     def products(self, request, category_id=None):
-        """Get all products in this category."""
         category = self.get_object()
         products = Product.objects.filter(
             category=category,
             status='active'
         ).select_related('category', 'clothing_type')
-        
         serializer = ProductSerializer(products, many=True)
         return APIResponse.success(
             data=serializer.data,
@@ -65,11 +54,9 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=True, methods=['get'])
     def children(self, request, category_id=None):
-        """Get child categories."""
         category = self.get_object()
         children = category.children.filter(is_active=True)
         serializer = self.get_serializer(children, many=True)
-        
         return APIResponse.success(
             data=serializer.data,
             message=f"Subcategories of {category.category_name}"
@@ -85,73 +72,44 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ClothingTypeViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for clothing types.
-    
-    List: GET /catalog/clothing-types/
-    Retrieve: GET /catalog/clothing-types/{id}/
-    Filter by category: GET /catalog/clothing-types/?category={id}
-    """
     queryset = ClothingType.objects.filter(is_active=True)
     serializer_class = ClothingTypeSerializer
     permission_classes = [AllowAny]
     lookup_field = 'type_id'
     
     def get_queryset(self):
-        """Filter by category if provided."""
         qs = super().get_queryset()
-        
         category_id = self.request.query_params.get('category')
         if category_id:
             qs = qs.filter(category_id=category_id)
-        
         return qs.select_related('category').order_by('display_order', 'type_name')
 
 
 class ColorViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for colors.
-    
-    List: GET /catalog/colors/
-    Retrieve: GET /catalog/colors/{id}/
-    """
     queryset = Color.objects.filter(is_active=True)
     serializer_class = ColorSerializer
     permission_classes = [AllowAny]
     lookup_field = 'color_id'
     
     def get_queryset(self):
-        """Optionally filter by color family."""
         qs = super().get_queryset()
-        
         family = self.request.query_params.get('family')
         if family:
             qs = qs.filter(color_family__iexact=family)
-        
         return qs.order_by('color_name')
 
 
 class SizeViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for sizes.
-    
-    List: GET /catalog/sizes/
-    Retrieve: GET /catalog/sizes/{id}/
-    Filter by category: GET /catalog/sizes/?category={category}
-    """
     queryset = Size.objects.filter(is_active=True)
     serializer_class = SizeSerializer
     permission_classes = [AllowAny]
     lookup_field = 'size_id'
     
     def get_queryset(self):
-        """Filter by size category if provided."""
         qs = super().get_queryset()
-        
         category = self.request.query_params.get('category')
         if category:
             qs = qs.filter(size_category__iexact=category)
-        
         return qs.order_by('sort_order', 'size_name')
     
     def retrieve(self, request, *args, **kwargs):
@@ -164,55 +122,43 @@ class SizeViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class CollectionViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for collections.
-    
-    List: GET /catalog/collections/
-    Retrieve: GET /catalog/collections/{id}/
-    Get featured: GET /catalog/collections/?featured=true
-    Get products: GET /catalog/collections/{id}/products/
-    """
     queryset = Collection.objects.filter(is_active=True)
     serializer_class = CollectionSerializer
     permission_classes = [AllowAny]
     lookup_field = 'collection_id'
     
     def get_queryset(self):
-        """Filter collections."""
         qs = super().get_queryset()
-        
-        # Featured collections only
         if self.request.query_params.get('featured') == 'true':
             qs = qs.filter(is_featured=True)
-        
         return qs.order_by('display_order', '-created_at')
     
     @action(detail=True, methods=['get'])
     def products(self, request, collection_id=None):
-        """Get all products in this collection."""
         collection = self.get_object()
-        
-        # Get products through the junction table
         products = Product.objects.filter(
             collection_memberships__collection=collection,
             status='active'
         ).select_related('category', 'clothing_type').distinct()
-        
         serializer = ProductSerializer(products, many=True)
         return APIResponse.success(
             data=serializer.data,
             message=f"Products in {collection.collection_name} collection"
         )
+    
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return APIResponse.success(
             data=serializer.data,
-            message=f"Size details: {instance.collection_name}"
+            message=f"Collection details: {instance.collection_name}"
         )
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Main Product ViewSet with slug filtering support
+    """
     queryset = Product.objects.filter(status='active')
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
@@ -225,144 +171,131 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Optimized queryset with prefetching."""
+        """✅ ADD SLUG FILTERING HERE"""
         qs = super().get_queryset()
         
-        # ✅ Add slug filtering support
+        # Handle slug filtering manually (not through filter_backends)
         slug = self.request.query_params.get('slug')
         if slug:
-            logger.info(f"Filtering products by slug: {slug}")
+            logger.info(f"🔍 Filtering by slug: {slug}")
             qs = qs.filter(slug=slug)
         
-        # Prefetch related data for efficiency
+        # Prefetch related data
         qs = qs.select_related('category', 'clothing_type')
         
-        # Add prefetch for variants and images if detail view or slug lookup
+        # Detailed prefetch for single product views
         if self.action == 'retrieve' or slug:
+            logger.info("📦 Prefetching variants and images")
             qs = qs.prefetch_related(
-                Prefetch('variants', queryset=ProductVariant.objects.select_related('size', 'color')),
-                Prefetch('images', queryset=ProductImage.objects.select_related('color').order_by('display_order'))
+                Prefetch(
+                    'variants',
+                    queryset=ProductVariant.objects.filter(status='active').select_related('size', 'color')
+                ),
+                Prefetch(
+                    'images',
+                    queryset=ProductImage.objects.select_related('color').order_by('display_order')
+                )
             )
         
         return qs
     
-    def list(self, request, *args, **kwargs):
-        """Override list to add logging"""
-        slug = request.query_params.get('slug')
-        if slug:
-            logger.info(f"📍 List action with slug filter: {slug}")
-        
-        response = super().list(request, *args, **kwargs)
-        
-        if slug:
-            logger.info(f"📦 Returned {len(response.data.get('results', []))} products for slug: {slug}")
-        
-        return response
-
-    
     def get_serializer_class(self):
-        """Use detailed serializer for retrieve action."""
-        if self.action == 'retrieve':
+        """Use detailed serializer for single products"""
+        if self.action == 'retrieve' or self.request.query_params.get('slug'):
             return ProductDetailSerializer
         return ProductSerializer
     
-    @action(detail=False, methods=['get'])
-    def featured(self, request):
-        """Get featured products."""
-        products = self.get_queryset().filter(is_featured=True)[:12]
-        serializer = self.get_serializer(products, many=True)
+    def list(self, request, *args, **kwargs):
+        """Override list to handle slug lookups"""
+        slug = request.query_params.get('slug')
         
-        return APIResponse.success(
-            data=serializer.data,
-            message="Featured products"
-        )
-    
-    @action(detail=False, methods=['get'], url_path='new-arrivals')
-    def new_arrivals(self, request):
-        """Get new arrival products."""
         try:
-            import traceback
-            import logging
-            logger = logging.getLogger(__name__)
+            queryset = self.filter_queryset(self.get_queryset())
             
-            logger.info("🔍 Fetching new arrivals...")
+            # If slug filter, check if product exists
+            if slug:
+                count = queryset.count()
+                logger.info(f"📦 Found {count} products with slug: {slug}")
+                
+                if count == 0:
+                    logger.warning(f"⚠️ No product found with slug: {slug}")
+                    return APIResponse.error(
+                        message=f"Product not found",
+                        status_code=status.HTTP_404_NOT_FOUND
+                    )
             
-            # Get products
-            products = self.get_queryset().filter(is_new_arrival=True).order_by('-created_at')[:20]
-            logger.info(f"📦 Found {products.count()} products")
+            # Pagination
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
             
-            # Serialize
-            logger.info("🔄 Serializing products...")
-            serializer = self.get_serializer(products, many=True)
-            
-            logger.info("✅ Serialization complete")
-            data = serializer.data
-            logger.info(f"📊 Serialized {len(data)} products")
-            
+            serializer = self.get_serializer(queryset, many=True)
             return APIResponse.success(
-                data=data,
-                message="New arrivals"
+                data=serializer.data,
+                message="Products retrieved successfully"
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Error in list: {str(e)}", exc_info=True)
+            return APIResponse.error(
+                message=f"Error: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance)
+            logger.info(f"✅ Retrieved: {instance.product_name}")
+            return APIResponse.success(
+                data=serializer.data,
+                message=f"Product: {instance.product_name}"
             )
         except Exception as e:
-            import traceback
-            import logging
-            logger = logging.getLogger(__name__)
-            
-            # Log the full error
-            logger.error("❌ Error in new_arrivals:")
-            logger.error(f"Error type: {type(e).__name__}")
-            logger.error(f"Error message: {str(e)}")
-            logger.error("Full traceback:")
-            logger.error(traceback.format_exc())
-            
+            logger.error(f"❌ Error: {str(e)}", exc_info=True)
             return APIResponse.error(
-                message=f"Error fetching new arrivals: {str(e)}",
+                message=str(e),
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=False, methods=['get'])
+    def featured(self, request):
+        products = self.get_queryset().filter(is_featured=True)[:12]
+        serializer = self.get_serializer(products, many=True)
+        return APIResponse.success(data=serializer.data, message="Featured products")
+    
+    @action(detail=False, methods=['get'], url_path='new-arrivals')
+    def new_arrivals(self, request):
+        products = self.get_queryset().filter(is_new_arrival=True).order_by('-created_at')[:20]
+        serializer = self.get_serializer(products, many=True)
+        return APIResponse.success(data=serializer.data, message="New arrivals")
+    
+    @action(detail=False, methods=['get'])
     def bestsellers(self, request):
-        """Get bestseller products."""
         products = self.get_queryset().filter(is_bestseller=True)[:12]
         serializer = self.get_serializer(products, many=True)
-        
-        return APIResponse.success(
-            data=serializer.data,
-            message="Bestsellers"
-        )
+        return APIResponse.success(data=serializer.data, message="Bestsellers")
     
     @action(detail=True, methods=['get'])
     def related(self, request, product_id=None):
-        """Get related products."""
         product = self.get_object()
-        
-        # Get related products
-        related_ids = RelatedProduct.objects.filter(
-            product=product
-        ).values_list('related_product_id', flat=True)
-        
+        related_ids = RelatedProduct.objects.filter(product=product).values_list('related_product_id', flat=True)
         related_products = Product.objects.filter(
             product_id__in=related_ids,
             status='active'
         ).select_related('category', 'clothing_type')
-        
         serializer = ProductSerializer(related_products, many=True)
-        
         return APIResponse.success(
             data=serializer.data,
-            message=f"Products related to {product.product_name}"
+            message=f"Related to {product.product_name}"
         )
     
     @action(detail=True, methods=['get'])
     def variants(self, request, product_id=None):
-        """Get all variants for a product with stock info."""
         product = self.get_object()
         variants = product.variants.select_related('size', 'color').filter(status='active')
-        
-        # You'll need to create a ProductVariantSerializer
-        from .serializers import ProductVariantSerializer
         serializer = ProductVariantSerializer(variants, many=True)
-        
         return APIResponse.success(
             data=serializer.data,
             message=f"Variants for {product.product_name}"
@@ -370,71 +303,49 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=True, methods=['get'])
     def colors(self, request, product_id=None):
-        """Get available colors for a product."""
         product = self.get_object()
-        
-        # Get unique colors from variants
         colors = Color.objects.filter(
             variants__product=product,
             variants__status='active'
         ).distinct()
-        
         serializer = ColorSerializer(colors, many=True)
-        
         return APIResponse.success(
             data=serializer.data,
-            message=f"Available colors for {product.product_name}"
+            message=f"Colors for {product.product_name}"
         )
     
     @action(detail=True, methods=['get'])
     def sizes(self, request, product_id=None):
-        """Get available sizes for a product, optionally filtered by color."""
         product = self.get_object()
         color_id = request.query_params.get('color')
-        
-        # Base query for sizes
         sizes_query = Size.objects.filter(
             variants__product=product,
             variants__status='active'
         )
-        
-        # Filter by color if provided
         if color_id:
             sizes_query = sizes_query.filter(variants__color_id=color_id)
-        
         sizes = sizes_query.distinct().order_by('sort_order')
         serializer = SizeSerializer(sizes, many=True)
-        
         return APIResponse.success(
             data=serializer.data,
-            message=f"Available sizes for {product.product_name}"
+            message=f"Sizes for {product.product_name}"
         )
     
     @action(detail=False, methods=['get'])
     def filters(self, request):
-        """Get available filter options (categories, colors, sizes, price range)."""
-        # Get active products
         products = self.get_queryset()
-        
-        # Get price range
         price_range = products.aggregate(
             min_price=Min('base_price'),
             max_price=Max('base_price')
         )
-        
-        # Get available categories
         categories = Category.objects.filter(
             products__in=products,
             is_active=True
         ).distinct().values('category_id', 'category_name')
-        
-        # Get available colors
         colors = Color.objects.filter(
             variants__product__in=products,
             is_active=True
         ).distinct().values('color_id', 'color_name', 'color_code')
-        
-        # Get available sizes
         sizes = Size.objects.filter(
             variants__product__in=products,
             is_active=True
@@ -446,41 +357,137 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 'categories': list(categories),
                 'colors': list(colors),
                 'sizes': list(sizes),
-                'seasons': [{'value': choice[0], 'label': choice[1]} for choice in Product._meta.get_field('season').choices],
+                'seasons': [
+                    {'value': choice[0], 'label': choice[1]} 
+                    for choice in Product._meta.get_field('season').choices
+                ],
             },
-            message="Available filter options"
+            message="Filter options"
         )
-    def retrieve(self, request, *args, **kwargs):
-        """
-        Retrieve product by slug instead of product_id
-        """
-        slug = kwargs.get('product_id')  # The URL parameter is still called product_id
         
-        try:
-            # Try to get by slug first
-            instance = Product.objects.select_related(
-                'category', 'clothing_type'
-            ).prefetch_related(
-                Prefetch('variants', queryset=ProductVariant.objects.select_related('size', 'color')),
-                Prefetch('images', queryset=ProductImage.objects.select_related('color').order_by('display_order'))
-            ).get(slug=slug, status='active')
-        except Product.DoesNotExist:
-            # Fallback to product_id if slug doesn't work
-            try:
-                instance = Product.objects.select_related(
-                    'category', 'clothing_type'
-                ).prefetch_related(
-                    Prefetch('variants', queryset=ProductVariant.objects.select_related('size', 'color')),
-                    Prefetch('images', queryset=ProductImage.objects.select_related('color').order_by('display_order'))
-                ).get(product_id=slug, status='active')
-            except (Product.DoesNotExist, ValueError):
-                return APIResponse.error(
-                    message="Product not found",
-                    status_code=status.HTTP_404_NOT_FOUND
+    @action(detail=False, methods=['get'], url_path='by-color')
+    def by_color(self, request):
+        """
+        Get products expanded by color variants.
+        Returns one "product card" per color variant.
+        """
+        from django.db.models import Prefetch
+        
+        # Get base products query with filters applied
+        products = self.filter_queryset(self.get_queryset())
+        
+        # Prefetch variants and images efficiently
+        products = products.prefetch_related(
+            Prefetch(
+                'variants', 
+                queryset=ProductVariant.objects.select_related('color', 'size').filter(
+                    status='active',
+                    stock_quantity__gt=0
                 )
+            ),
+            Prefetch(
+                'images', 
+                queryset=ProductImage.objects.select_related('color').order_by('display_order')
+            )
+        )
         
-        serializer = self.get_serializer(instance)
+        # Expand products by color
+        color_variants = []
+        
+        for product in products:
+            # Get unique colors from variants
+            colors_data = {}
+            
+            for variant in product.variants.all():
+                if not variant.color:
+                    continue
+                    
+                color_id = variant.color.color_id
+                
+                if color_id not in colors_data:
+                    colors_data[color_id] = {
+                        'color': variant.color,
+                        'sizes': set(),
+                        'stock': 0
+                    }
+                
+                if variant.size:
+                    colors_data[color_id]['sizes'].add(variant.size.size_name)
+                colors_data[color_id]['stock'] += variant.stock_quantity
+            
+            # Create a product entry for each color that has stock
+            for color_id, color_info in colors_data.items():
+                if color_info['stock'] <= 0:
+                    continue  # Skip colors with no stock
+                    
+                color = color_info['color']
+                
+                # ✅ FIXED: Better image retrieval logic
+                primary_img = None
+                fallback_img = None
+                
+                # First, try to find primary image for this color
+                for img in product.images.all():
+                    if img.color_id == color_id:
+                        if img.is_primary:
+                            primary_img = img
+                            break
+                        elif not fallback_img:
+                            fallback_img = img
+                
+                # Use primary image if found, otherwise use fallback
+                selected_img = primary_img or fallback_img
+                
+                # Get the image URL - handle both file and URL fields
+                image_url = None
+                if selected_img:
+                    if selected_img.image_url:
+                        image_url = selected_img.image_url
+                    elif selected_img.image_file:
+                        # If image_url is empty but file exists, generate URL
+                        from apps.core.storage import SupabaseStorage
+                        storage = SupabaseStorage()
+                        filename = selected_img.image_file.name
+                        if '/' in filename:
+                            filename = filename.split('/')[-1]
+                        image_url = storage.url(filename)
+                
+                # ✅ LOG for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"Product: {product.product_name}, Color: {color.color_name}, Image URL: {image_url}")
+                
+                # Build the color variant object
+                color_variant = {
+                    'id': product.product_id,
+                    'slug': product.slug,
+                    'name': product.product_name,
+                    'color_id': color.color_id,
+                    'color_name': color.color_name,
+                    'color_code': color.color_code or '#CCCCCC',
+                    'primary_image': image_url,  # ✅ Now properly set
+                    'base_price': str(product.base_price),
+                    'sale_price': str(product.sale_price) if product.sale_price else None,
+                    'available_sizes': sorted(list(color_info['sizes'])),
+                    'is_featured': product.is_featured,
+                    'is_new_arrival': product.is_new_arrival,
+                    'is_bestseller': product.is_bestseller,
+                    'category': product.category.category_name if product.category else None,
+                    'season': product.season,
+                    'stock_quantity': color_info['stock'],
+                }
+                
+                color_variants.append(color_variant)
+        
+        # Sort color variants by product name, then by color name
+        color_variants.sort(key=lambda x: (x['name'], x['color_name']))
+        
+        # Apply pagination
+        page = self.paginate_queryset(color_variants)
+        if page is not None:
+            return self.get_paginated_response(page)
+        
         return APIResponse.success(
-            data=serializer.data,
-            message=f"Product details: {instance.product_name}"
+            data=color_variants,
+            message=f"Found {len(color_variants)} color variants"
         )

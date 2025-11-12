@@ -133,11 +133,12 @@ class ProductImageInline(admin.TabularInline):
 
 @admin.register(Category)
 class CategoryAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
-    list_display = ['category_name', 'parent_category', 'is_active', 'display_order']
+    list_display = ['category_name', 'category_slug', 'parent_category', 'is_active', 'display_order']
     list_filter = ['is_active', 'parent_category']
-    search_fields = ['category_name', 'description']
+    search_fields = ['category_name', 'category_slug','description']
     ordering = ['display_order', 'category_name']
-    
+    prepopulated_fields = {'category_slug': ('category_name',)}  # Auto-generate slug in admin
+
     exclude = ('is_active','description', 'category_path')
     
     def get_queryset(self, request):
@@ -183,7 +184,7 @@ class SizeAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
 class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     list_display = [
         'product_name', 'product_code', 'category', 'clothing_type', 
-        'base_price', 'status', 'stock_quantity', 'is_featured',
+        'base_price', 'status', 'stock_quantity', 'is_featured', 'is_new_arrival',
         'color_count', 'image_count'
     ]
     list_filter = [

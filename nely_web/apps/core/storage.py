@@ -1,13 +1,17 @@
 import os
 import uuid
+import re
+from urllib.parse import quote
 from django.core.files.storage import Storage
 from django.core.files.base import ContentFile
 from django.conf import settings
+from django.utils.text import slugify
+from unidecode import unidecode
 
 
 class SupabaseStorage(Storage):
     """
-    Custom storage backend for Supabase
+    Custom storage backend for Supabase with support for Cyrillic filenames
     """
     def __init__(self):
         self.supabase_url = settings.SUPABASE_URL
@@ -20,15 +24,90 @@ class SupabaseStorage(Storage):
             self.client = create_client(self.supabase_url, self.supabase_key)
         except ImportError:
             raise ImportError("supabase package is required. Install it with: pip install supabase")
+    
+    def _sanitize_filename(self, filename):
+        """
+        Sanitize filename to remove special characters and transliterate Cyrillic.
+        Converts: 'products/грин.png' -> 'grin.png'
+        """
+        import re
+        import unicodedata
         
+        # Transliteration map for Cyrillic to Latin
+        cyrillic_to_latin = {
+            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+            'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+            'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+            'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+            'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+            'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+            'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+            'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+            'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
+            'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+        }
+        
+        # Split filename and extension
+        import os
+        name, ext = os.path.splitext(filename)
+        
+        # Transliterate Cyrillic characters
+        transliterated = ''
+        for char in name:
+            transliterated += cyrillic_to_latin.get(char, char)
+        
+        # Remove any remaining non-ASCII characters
+        transliterated = unicodedata.normalize('NFKD', transliterated)
+        transliterated = transliterated.encode('ascii', 'ignore').decode('ascii')
+        
+        # Replace spaces and special characters with hyphens
+        transliterated = re.sub(r'[^\w\s-]', '', transliterated)
+        transliterated = re.sub(r'[-\s]+', '-', transliterated)
+        
+        # Remove leading/trailing hyphens
+        transliterated = transliterated.strip('-')
+        
+        # Convert to lowercase
+        transliterated = transliterated.lower()
+        
+        # Reconstruct filename with extension
+        sanitized = f"{transliterated}{ext.lower()}"
+        
+        return sanitized
+            
     def _save(self, name, content):
         """
-        Save file to Supabase storage
+        Save file to Supabase storage with sanitized filename.
+        Removes directory prefixes and sanitizes to handle Cyrillic and special characters.
         """
-        # Generate unique filename if needed
-        if not name:
-            ext = os.path.splitext(content.name)[1] if hasattr(content, 'name') else ''
-            name = f"{uuid.uuid4()}{ext}"
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Log original name
+        logger.info(f"📥 Original name: {name}")
+        
+        # ✅ STEP 1: Remove directory prefix FIRST (e.g., 'products/') - keep only filename
+        if '/' in name:
+            name = name.split('/')[-1]
+            logger.info(f"🔧 Removed directory prefix, new name: {name}")
+        
+        # ✅ STEP 2: Sanitize the filename to handle Cyrillic and special characters
+        sanitized_name = self._sanitize_filename(name)
+        logger.info(f"✨ Sanitized name: {sanitized_name}")
+        
+        # ✅ STEP 3: Strip any leading slashes to ensure root-level save
+        sanitized_name = sanitized_name.lstrip('/')
+        
+        # ✅ STEP 4: Generate unique name if file already exists (optional)
+        # Uncomment if you want to avoid overwriting files
+        # import uuid
+        # from pathlib import Path
+        # if sanitized_name:
+        #     stem = Path(sanitized_name).stem
+        #     ext = Path(sanitized_name).suffix
+        #     sanitized_name = f"{stem}_{uuid.uuid4().hex[:8]}{ext}"
+        
+        logger.info(f"📁 Final path (root level): {sanitized_name}")
         
         # Read file content
         if hasattr(content, 'read'):
@@ -41,22 +120,26 @@ class SupabaseStorage(Storage):
             
         # Upload to Supabase
         try:
-            self.client.storage.from_(self.bucket_name).upload(
-                path=name,
+            response = self.client.storage.from_(self.bucket_name).upload(
+                path=sanitized_name,
                 file=file_content,
-                file_options={"content-type": self._get_content_type(name)}
+                file_options={"content-type": self._get_content_type(sanitized_name)}
             )
-            return name
+            logger.info(f"✅ Uploaded successfully to: {sanitized_name}")
+            return sanitized_name
         except Exception as e:
+            logger.error(f"❌ Upload failed: {str(e)}")
             # If file exists, try updating it
             try:
-                self.client.storage.from_(self.bucket_name).update(
-                    path=name,
+                response = self.client.storage.from_(self.bucket_name).update(
+                    path=sanitized_name,
                     file=file_content,
-                    file_options={"content-type": self._get_content_type(name)}
+                    file_options={"content-type": self._get_content_type(sanitized_name)}
                 )
-                return name
+                logger.info(f"✅ Updated successfully: {sanitized_name}")
+                return sanitized_name
             except Exception as update_error:
+                logger.error(f"❌ Update also failed: {str(update_error)}")
                 raise Exception(f"Failed to upload to Supabase: {update_error}")
     
     def _open(self, name, mode='rb'):
@@ -91,19 +174,24 @@ class SupabaseStorage(Storage):
     
     def url(self, name):
         """
-        Return public URL for the file
-        ⚠️ FIXED: Properly handles the upload_to path
+        Return public URL for the file.
+        Constructs a reliable public URL for Supabase storage.
         """
-        try:
-            # Ensure name doesn't have leading slash
-            clean_name = name.lstrip('/')
-            # Get public URL using Supabase client
-            response = self.client.storage.from_(self.bucket_name).get_public_url(clean_name)
-            return response
-        except Exception as e:
-            # Fallback to constructed URL
-            clean_name = name.lstrip('/')
-            return f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{clean_name}"
+        if not name:
+            return None
+        
+        # Clean the name - remove any leading slashes
+        clean_name = name.lstrip('/')
+        
+        # URL encode the name to handle special characters
+        # Use quote() to properly encode the path while keeping slashes
+        encoded_name = quote(clean_name, safe='/')
+        
+        # Construct the public URL directly
+        # This is more reliable than using get_public_url()
+        public_url = f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{encoded_name}"
+        
+        return public_url
     
     def size(self, name):
         """

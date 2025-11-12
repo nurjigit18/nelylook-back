@@ -10,6 +10,7 @@ class CategorySerializer(serializers.ModelSerializer):
     """Serializer for Category model."""
     id = serializers.IntegerField(source="category_id", read_only=True)
     name = serializers.CharField(source="category_name")
+    slug = serializers.SlugField(source="category_slug", read_only=True)  
     parent = serializers.PrimaryKeyRelatedField(
         source="parent_category",
         queryset=Category.objects.all(),
@@ -25,7 +26,7 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = [
-            "id", "name",
+            "id", "name", "slug",
             "category_path", "description",
             "display_order", "is_active",
             "parent", "parent_name",
@@ -71,18 +72,28 @@ class SizeSerializer(serializers.ModelSerializer):
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
-    """Serializer for ProductImage model."""
     id = serializers.IntegerField(source="image_id", read_only=True)
+    url = serializers.SerializerMethodField()  # ✅ Changed to method field
     color = ColorSerializer(read_only=True)
-    color_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
-    url = serializers.CharField(source="image_url", read_only=True)
-
+    color_id = serializers.IntegerField(source="color.color_id", read_only=True, allow_null=True)
+    
     class Meta:
         model = ProductImage
-        fields = [
-            "id", "color", "color_id", "url", 
-            "alt_text", "is_primary", "display_order", "image_type"
-        ]
+        fields = ["id", "url", "alt_text", "is_primary", "display_order", "color", "color_id"]
+    
+    def get_url(self, obj):
+        """Get the image URL, handling both image_url field and image_file"""
+        if obj.image_url:
+            return obj.image_url
+        elif obj.image_file:
+            # Generate URL from file
+            from apps.core.storage import SupabaseStorage
+            storage = SupabaseStorage()
+            filename = obj.image_file.name
+            if '/' in filename:
+                filename = filename.split('/')[-1]
+            return storage.url(filename)
+        return None
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
@@ -177,16 +188,48 @@ class ProductSerializer(serializers.ModelSerializer):
         ).distinct().order_by('sort_order')
         return SizeSerializer(sizes, many=True).data
 
+class ProductColorVariantSerializer(serializers.ModelSerializer):
+    """
+    Serializer for displaying products grouped by color.
+    Each color variant appears as a separate product card.
+    """
+    id = serializers.IntegerField(source="product_id", read_only=True)
+    name = serializers.CharField(source="product_name")
+    slug = serializers.CharField(read_only=True)
+    
+    # Color-specific fields
+    color_id = serializers.IntegerField()
+    color_name = serializers.CharField()
+    color_code = serializers.CharField()
+    
+    # Primary image for this color
+    primary_image = serializers.CharField(allow_null=True)
+    
+    # Price fields
+    base_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    sale_price = serializers.DecimalField(max_digits=10, decimal_places=2, allow_null=True)
+    
+    # Available sizes for this color
+    available_sizes = serializers.ListField(child=serializers.CharField())
+    
+    class Meta:
+        model = Product
+        fields = [
+            "id", "slug", "name",
+            "color_id", "color_name", "color_code",
+            "primary_image",
+            "base_price", "sale_price",
+            "available_sizes",
+            "is_featured", "is_new_arrival", "is_bestseller",
+            "category", "season"
+        ]
+
 
 class ProductDetailSerializer(ProductSerializer):
     """
     Extended product serializer for detail view.
     Shows more information but still hides sensitive data.
     """
-    # Normalize field names for frontend
-    id = serializers.IntegerField(source="product_id", read_only=True)
-    name = serializers.CharField(source="product_name", read_only=True)
-    
     variants = ProductVariantSerializer(many=True, read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     
@@ -200,34 +243,12 @@ class ProductDetailSerializer(ProductSerializer):
     # Season info
     season_display = serializers.CharField(source="get_season_display", read_only=True)
     
-    # Category name
-    category_name = serializers.CharField(source="category.category_name", read_only=True)
-    
     class Meta(ProductSerializer.Meta):
-        fields = [
-            # IDs and basic info
-            "id", "code", "name", "slug",
-            
-            # Descriptions
-            "description", "short_description",
-            
-            # Relations
-            "category", "category_name", "clothing_type",
-            
-            # Pricing
-            "season", "season_display",
-            "base_price", "sale_price",
-            
-            # Flags
-            "is_featured", "is_new_arrival", "is_bestseller",
-            "stock_quantity", "status",
-            
-            # Timestamps
-            "created_at", "updated_at",
-            
-            # Related data
+        fields = ProductSerializer.Meta.fields + [
+            "description",
+            "season_display",
+            "variants", 
             "images", 
-            "variants",
             "available_colors", 
             "available_sizes",
         ]
@@ -249,6 +270,7 @@ class ProductDetailSerializer(ProductSerializer):
             variants__stock_quantity__gt=0
         ).distinct().order_by('sort_order')
         return SizeSerializer(sizes, many=True).data
+
 
 
 

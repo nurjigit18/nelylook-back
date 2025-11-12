@@ -70,6 +70,7 @@ FRONTEND_ORIGINS = [
 CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS if not DEBUG else [
     "http://127.0.0.1:3000",
     "http://localhost:3000",
+    "https://nelylook.com",
 ]
 CORS_ALLOW_CREDENTIALS = True
 

@@ -4,106 +4,78 @@ from django.db.models import Q
 from .models import Product, Category, ClothingType, Color, Size
 
 
+class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
+    """Accepts comma-separated numbers: ?category=1,2,3"""
+    pass
+
+
+class CharInFilter(django_filters.BaseInFilter, django_filters.CharFilter):
+    """For season etc."""
+    pass
+
+
 class ProductFilter(django_filters.FilterSet):
-    """
-    Advanced filtering for products.
-    
-    Usage examples:
-    - /products/?category=1
-    - /products/?min_price=100&max_price=500
-    - /products/?color=1,2,3
-    - /products/?size=S,M,L
-    - /products/?season=summer
-    - /products/?on_sale=true
-    """
-    
-    # Category filters
-    category = django_filters.ModelMultipleChoiceFilter(
-        field_name='category',
-        queryset=Category.objects.filter(is_active=True),
+    # Category ids
+    category = NumberInFilter(
+        field_name='category_id',  # or 'category' if FK name is category
+        lookup_expr='in',
         label='Category IDs'
     )
-    
-    # Clothing type filter
-    clothing_type = django_filters.ModelMultipleChoiceFilter(
-        field_name='clothing_type',
-        queryset=ClothingType.objects.filter(is_active=True),
+
+    clothing_type = NumberInFilter(
+        field_name='clothing_type_id',
+        lookup_expr='in',
         label='Clothing Type IDs'
     )
-    
-    # Price range filters
+
+    # Price
     min_price = django_filters.NumberFilter(
         field_name='base_price',
-        lookup_expr='gte',
-        label='Minimum price'
+        lookup_expr='gte'
     )
     max_price = django_filters.NumberFilter(
         field_name='base_price',
-        lookup_expr='lte',
-        label='Maximum price'
+        lookup_expr='lte'
     )
-    
-    # Color filter (filters by variants)
-    color = django_filters.ModelMultipleChoiceFilter(
-        field_name='variants__color',
-        queryset=Color.objects.filter(is_active=True),
-        label='Color IDs',
-        distinct=True
+
+    # Colors from variants
+    color = NumberInFilter(
+        field_name='variants__color_id',
+        lookup_expr='in',
+        label='Color IDs'
     )
-    
-    # Size filter (filters by variants)
-    size = django_filters.ModelMultipleChoiceFilter(
-        field_name='variants__size',
-        queryset=Size.objects.filter(is_active=True),
-        label='Size IDs',
-        distinct=True
+
+    # Sizes from variants
+    size = NumberInFilter(
+        field_name='variants__size_id',
+        lookup_expr='in',
+        label='Size IDs'
     )
-    
-    # Season filter
-    season = django_filters.MultipleChoiceFilter(
+
+    # Season (enum) – will accept ?season=summer,winter
+    season = CharInFilter(
         field_name='season',
-        choices=[(choice[0], choice[1]) for choice in Product._meta.get_field('season').choices],
-        label='Season'
+        lookup_expr='in'
     )
-    
-    # Boolean filters
-    on_sale = django_filters.BooleanFilter(
-        method='filter_on_sale',
-        label='On sale (has sale_price)'
-    )
-    featured = django_filters.BooleanFilter(
-        field_name='is_featured',
-        label='Featured products'
-    )
-    new_arrival = django_filters.BooleanFilter(
-        field_name='is_new_arrival',
-        label='New arrivals'
-    )
-    bestseller = django_filters.BooleanFilter(
-        field_name='is_bestseller',
-        label='Bestsellers'
-    )
-    
-    # Stock availability
-    in_stock = django_filters.BooleanFilter(
-        method='filter_in_stock',
-        label='In stock'
-    )
-    
+
+    on_sale = django_filters.BooleanFilter(method='filter_on_sale')
+    featured = django_filters.BooleanFilter(field_name='is_featured')
+    new_arrival = django_filters.BooleanFilter(field_name='is_new_arrival')
+    bestseller = django_filters.BooleanFilter(field_name='is_bestseller')
+    in_stock = django_filters.BooleanFilter(method='filter_in_stock')
+
     class Meta:
         model = Product
-        fields = {
-            'status': ['exact'],
-        }
-    
+        fields = ['status']
+
     def filter_on_sale(self, queryset, name, value):
-        """Filter products that have a sale price."""
         if value:
+            # products that actually have sale_price
             return queryset.filter(sale_price__isnull=False).exclude(sale_price=0)
-        return queryset.filter(Q(sale_price__isnull=True) | Q(sale_price=0))
-    
+        # if ?on_sale=false – just return queryset unchanged or opposite, your choice
+        return queryset
+
     def filter_in_stock(self, queryset, name, value):
-        """Filter products that have stock available."""
         if value:
             return queryset.filter(stock_quantity__gt=0)
-        return queryset.filter(stock_quantity=0)
+        return queryset

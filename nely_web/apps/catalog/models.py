@@ -1,6 +1,7 @@
 # apps/catalog/models.py - FIXED VERSION
 from django.db import models
 from apps.core.storage import SupabaseStorage
+from django.utils.text import slugify
 import uuid
 
 class Season(models.TextChoices):
@@ -23,6 +24,7 @@ class ImageFile(models.TextChoices):
 
 class Category(models.Model):
     category_id = models.AutoField(primary_key=True)
+    category_slug = models.SlugField(unique=True, max_length=100, blank=True, verbose_name="URL-идентификатор")
     category_name = models.CharField(max_length=100, unique=True, verbose_name="Категории")
     parent_category = models.ForeignKey(
         'self',
@@ -36,6 +38,12 @@ class Category(models.Model):
     display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
     is_active = models.BooleanField(default=True, verbose_name="В наличии")
 
+    def save(self, *args, **kwargs):
+        if not self.category_slug and self.category_name:
+            base_slug = slugify(self.category_name, allow_unicode=True)
+            self.category_slug = base_slug
+        super().save(*args, **kwargs)
+        
     class Meta:
         db_table = 'categories'
         verbose_name = 'Категория'
@@ -155,20 +163,43 @@ class Product(models.Model):
         ordering = ['-created_at']
     
     def save(self, *args, **kwargs):
-        # Auto-generate slug if not provided
+        Model = type(self)  # this is your Product model
+
+        # 1) generate slug
         if not self.slug and self.product_name:
             from django.utils.text import slugify
             base_slug = slugify(self.product_name)
             slug = base_slug
             counter = 1
-            
-            while Product.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+
+            while Model.objects.filter(slug=slug).exclude(pk=self.pk).exists():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
-            
+
             self.slug = slug
-        
+
+        # 2) generate product_code like NL-00000
+        if not self.product_code:
+            prefix = "NL-"
+            last_code_obj = Model.objects.filter(
+                product_code__startswith=prefix
+            ).order_by("-product_code").first()
+
+            if last_code_obj and last_code_obj.product_code:
+                last_num_str = last_code_obj.product_code.replace(prefix, "")
+                try:
+                    last_num = int(last_num_str)
+                except ValueError:
+                    last_num = 0
+            else:
+                last_num = 0
+
+            new_num = last_num + 1
+            self.product_code = f"{prefix}{new_num:05d}"
+
         super().save(*args, **kwargs)
+
+
 
     def __str__(self):
         return self.product_name
@@ -230,6 +261,8 @@ class ProductVariant(models.Model):
         return ' - '.join(parts)
 
 
+# apps/catalog/models.py
+
 class ProductImage(models.Model):
     image_id = models.AutoField(primary_key=True)
     product = models.ForeignKey(
@@ -240,7 +273,6 @@ class ProductImage(models.Model):
         verbose_name='Модель'
     )
     
-    # Link to Color (required) - this is the key!
     color = models.ForeignKey(
         'Color',
         on_delete=models.CASCADE, 
@@ -250,9 +282,8 @@ class ProductImage(models.Model):
         verbose_name='Цвет'
     )
     
-    # NEW: File upload field - uploads to Supabase
     image_file = models.ImageField(
-        upload_to='products/',
+        upload_to='',
         storage=SupabaseStorage,
         blank=True,
         null=True,
@@ -260,7 +291,6 @@ class ProductImage(models.Model):
         help_text='Загрузите фото (будет сохранено в Supabase)'
     )
     
-    # Existing URL field - auto-populated from Supabase
     image_url = models.URLField(
         max_length=500, 
         blank=True,
@@ -272,14 +302,13 @@ class ProductImage(models.Model):
     is_primary = models.BooleanField(default=False, verbose_name='Основное фото для этого цвета')
     display_order = models.IntegerField(default=1, verbose_name='Порядок показа')
     image_type = models.CharField(max_length=20, choices=ImageFile.choices, default=ImageFile.PNG, verbose_name="Тип файла")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    created_at = models.DateTimeField(auto_now_add=True, null=False, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'product_images'
         verbose_name = 'Фото товара'
         verbose_name_plural = 'Фото товаров'
         ordering = ['product', 'color', 'display_order']
-        # Ensure each color has one primary image
         constraints = [
             models.UniqueConstraint(
                 fields=['product', 'color'],
@@ -295,12 +324,17 @@ class ProductImage(models.Model):
         if self.image_file and not self.image_url:
             # Get the public URL from Supabase
             storage = SupabaseStorage()
-            self.image_url = self.image_file.storage.url(self.image_file.name)
+            # Get just the filename without any path prefix
+            filename = self.image_file.name
+            if '/' in filename:
+                filename = filename.split('/')[-1]  # Get last part after slash
+            self.image_url = storage.url(filename)
         
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.product.product_name} - {self.color.color_name}"
+        return f"{self.product.product_name} - {self.color.color_name if self.color else 'No color'}"
+
 
 
 class RelatedProduct(models.Model):
@@ -348,3 +382,6 @@ class CollectionProduct(models.Model):
     
     def __str__(self):
         return f"{self.collection.collection_name} - {self.product.product_name}"
+    
+
+
