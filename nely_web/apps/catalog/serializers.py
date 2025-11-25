@@ -63,17 +63,18 @@ class SizeSerializer(serializers.ModelSerializer):
     """Serializer for Size model."""
     id = serializers.IntegerField(source="size_id", read_only=True)
     name = serializers.CharField(source="size_name")
+    code = serializers.CharField(source="size_code", allow_null=True, required=False)
     category = serializers.CharField(source="size_category", allow_null=True, required=False)
     group = serializers.CharField(source="size_group", allow_null=True, required=False)
 
     class Meta:
         model = Size
-        fields = ["id", "name", "category", "group", "sort_order", "measurements", "is_active"]
+        fields = ["id", "name", "code", "category", "group", "sort_order", "measurements", "is_active"]
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source="image_id", read_only=True)
-    url = serializers.SerializerMethodField()  # ✅ Changed to method field
+    url = serializers.SerializerMethodField()
     color = ColorSerializer(read_only=True)
     color_id = serializers.IntegerField(source="color.color_id", read_only=True, allow_null=True)
     
@@ -86,7 +87,6 @@ class ProductImageSerializer(serializers.ModelSerializer):
         if obj.image_url:
             return obj.image_url
         elif obj.image_file:
-            # Generate URL from file
             from apps.core.storage import SupabaseStorage
             storage = SupabaseStorage()
             filename = obj.image_file.name
@@ -155,11 +155,17 @@ class ProductSerializer(serializers.ModelSerializer):
     season_display = serializers.CharField(source="get_season_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     
-    # CRITICAL: Include images in basic serializer
+    # Images
     images = ProductImageSerializer(many=True, read_only=True)
     
-    # Add available sizes
+    # Available sizes
     available_sizes = serializers.SerializerMethodField()
+    
+    # ✅ NEW: Wishlist support fields
+    default_variant_id = serializers.SerializerMethodField()
+    primary_color_id = serializers.SerializerMethodField()
+    primary_color_name = serializers.SerializerMethodField()
+    primary_color_code = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -173,8 +179,12 @@ class ProductSerializer(serializers.ModelSerializer):
             "is_featured", "is_new_arrival", "is_bestseller",
             "stock_quantity",
             "status", "status_display",
-            "images",  # ← INCLUDED
+            "images",
             "available_sizes",
+            "default_variant_id",      # ✅ For wishlist
+            "primary_color_id",        # ✅ For reference
+            "primary_color_name",      # ✅ For display
+            "primary_color_code",      # ✅ For UI
             "created_at", "updated_at",
         ]
         read_only_fields = ("created_at", "updated_at", "code")
@@ -187,6 +197,68 @@ class ProductSerializer(serializers.ModelSerializer):
             is_active=True
         ).distinct().order_by('sort_order')
         return SizeSerializer(sizes, many=True).data
+    
+    def get_primary_color_id(self, obj):
+        """Get the color ID of the primary image."""
+        primary_image = obj.images.filter(is_primary=True).first()
+        if primary_image and primary_image.color:
+            return primary_image.color.color_id
+        return None
+    
+    def get_primary_color_name(self, obj):
+        """Get the color name of the primary image."""
+        primary_image = obj.images.filter(is_primary=True).first()
+        if primary_image and primary_image.color:
+            return primary_image.color.color_name
+        return None
+    
+    def get_primary_color_code(self, obj):
+        """Get the color code (hex) of the primary image."""
+        primary_image = obj.images.filter(is_primary=True).first()
+        if primary_image and primary_image.color:
+            return primary_image.color.color_code
+        return None
+    
+    def get_default_variant_id(self, obj):
+        """
+        Get the first available variant ID for the primary color.
+        This is used for wishlisting from product cards.
+        
+        Strategy:
+        1. Get the color from the primary image
+        2. Find first in-stock variant with that color (ordered by size)
+        3. Fallback to any variant with that color
+        4. Final fallback to any available variant
+        """
+        # Get primary image color
+        primary_image = obj.images.filter(is_primary=True).first()
+        
+        if primary_image and primary_image.color:
+            # Try to get in-stock variant with this color (smallest size first)
+            variant = obj.variants.filter(
+                color=primary_image.color,
+                status='active',
+                stock_quantity__gt=0
+            ).order_by('size__sort_order', 'variant_id').first()
+            
+            # Fallback: any active variant with this color
+            if not variant:
+                variant = obj.variants.filter(
+                    color=primary_image.color,
+                    status='active'
+                ).order_by('size__sort_order', 'variant_id').first()
+            
+            if variant:
+                return variant.variant_id
+        
+        # Final fallback: any available variant
+        variant = obj.variants.filter(
+            status='active',
+            stock_quantity__gt=0
+        ).order_by('variant_id').first()
+        
+        return variant.variant_id if variant else None
+
 
 class ProductColorVariantSerializer(serializers.ModelSerializer):
     """
@@ -270,8 +342,6 @@ class ProductDetailSerializer(ProductSerializer):
             variants__stock_quantity__gt=0
         ).distinct().order_by('sort_order')
         return SizeSerializer(sizes, many=True).data
-
-
 
 
 class CollectionSerializer(serializers.ModelSerializer):

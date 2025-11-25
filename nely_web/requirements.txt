@@ -13,5 +13,5 @@ django-cors-headers
 supabase
 pillow
 django-nested-admin
-sendgrid
 unidecode
+resend

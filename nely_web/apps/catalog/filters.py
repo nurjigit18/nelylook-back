@@ -6,35 +6,39 @@ from .models import Product
 class ProductFilter(django_filters.FilterSet):
     # Category filter - accepts comma-separated IDs
     category = django_filters.CharFilter(method='filter_categories')
-    
+
     # Color filter - accepts comma-separated IDs
     color = django_filters.CharFilter(method='filter_colors')
-    
+
     # Size filter - accepts comma-separated IDs
     size = django_filters.CharFilter(method='filter_sizes')
-    
+
     # Price range
     min_price = django_filters.NumberFilter(field_name='base_price', lookup_expr='gte')
     max_price = django_filters.NumberFilter(field_name='base_price', lookup_expr='lte')
-    
+
     # Season
     season = django_filters.CharFilter(method='filter_seasons')
-    
+
     # Search
     search = django_filters.CharFilter(method='filter_search')
-    
+
     # ✅ NEW: Special filters
     on_sale = django_filters.BooleanFilter(method='filter_on_sale')
     is_featured = django_filters.BooleanFilter(field_name='is_featured')
     is_new_arrival = django_filters.BooleanFilter(field_name='is_new_arrival')
     is_bestseller = django_filters.BooleanFilter(field_name='is_bestseller')
-    
+
+    # Collection filter - accepts collection ID
+    collection = django_filters.NumberFilter(method='filter_collection')
+
     class Meta:
         model = Product
         fields = [
-            'category', 'color', 'size', 'season', 
+            'category', 'color', 'size', 'season',
             'min_price', 'max_price', 'search',
-            'on_sale', 'is_featured', 'is_new_arrival', 'is_bestseller'
+            'on_sale', 'is_featured', 'is_new_arrival', 'is_bestseller',
+            'collection'
         ]
     
     def filter_categories(self, queryset, name, value):
@@ -110,3 +114,14 @@ class ProductFilter(django_filters.FilterSet):
                 sale_price=0
             )
         return queryset
+
+    def filter_collection(self, queryset, name, value):
+        """Filter products by collection ID"""
+        if not value:
+            return queryset
+        try:
+            return queryset.filter(
+                collection_memberships__collection_id=value
+            ).distinct()
+        except (ValueError, TypeError):
+            return queryset

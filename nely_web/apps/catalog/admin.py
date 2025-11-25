@@ -5,8 +5,8 @@ from django import forms
 from django.db.models import Count, Q
 from apps.core.admin_mixins import RoleBasedAdminMixin
 from .models import (
-    Category, ClothingType, Product, ProductVariant, 
-    Collection, Color, Size, ProductImage, RelatedProduct
+    Category, ClothingType, Product, ProductVariant,
+    Collection, CollectionProduct, Color, Size, ProductImage, RelatedProduct
 )
 
 
@@ -105,10 +105,10 @@ class ProductImageInline(admin.TabularInline):
     extra = 0  # Don't show empty forms by default
     fields = ['color', 'image_file', 'alt_text', 'is_primary', 'display_order', 'image_preview']
     readonly_fields = ['image_preview']
-    
+
     # Order by color for consistency with variants
     ordering = ['color', 'display_order']
-    
+
     def get_formset(self, request, obj=None, **kwargs):
         """
         Pass the parent object to the form so it can filter colors
@@ -116,7 +116,7 @@ class ProductImageInline(admin.TabularInline):
         formset = super().get_formset(request, obj, **kwargs)
         formset.form.parent_obj = obj
         return formset
-    
+
     def image_preview(self, obj):
         if obj.image_url:
             return format_html(
@@ -125,6 +125,17 @@ class ProductImageInline(admin.TabularInline):
             )
         return "Нет фото"
     image_preview.short_description = 'Превью'
+
+
+class CollectionProductInline(admin.TabularInline):
+    """Inline for adding products to a collection"""
+    model = CollectionProduct
+    extra = 1
+    fields = ['product', 'display_order']
+    autocomplete_fields = ['product']
+    ordering = ['display_order']
+    verbose_name = "Товар в коллекции"
+    verbose_name_plural = "Товары в коллекции"
 
 
 # ============================================================================
@@ -293,10 +304,31 @@ class ProductVariantAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
 
 @admin.register(Collection)
 class CollectionAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
-    list_display = ['collection_name', 'is_featured', 'is_active', 'display_order', 'created_at']
+    list_display = ['collection_name', 'collection_slug', 'product_count', 'is_featured', 'is_active', 'display_order', 'created_at']
     list_filter = ['is_featured', 'is_active']
-    search_fields = ['collection_name', 'description']
+    search_fields = ['collection_name', 'collection_slug', 'description']
     prepopulated_fields = {'collection_slug': ('collection_name',)}
+    inlines = [CollectionProductInline]
+
+    fieldsets = (
+        ('📋 Основная информация', {
+            'fields': ('collection_name', 'collection_slug', 'description')
+        }),
+        ('🖼️ Баннер', {
+            'fields': ('banner_image',),
+            'description': 'URL изображения баннера для страницы коллекции'
+        }),
+        ('⚙️ Настройки', {
+            'fields': ('is_featured', 'is_active', 'display_order')
+        }),
+    )
+
+    def product_count(self, obj):
+        count = obj.collection_products.count()
+        if count > 0:
+            return format_html('<span style="color: green;">{} товаров</span>', count)
+        return format_html('<span style="color: orange;">Нет товаров</span>')
+    product_count.short_description = 'Товары'
 
 
 @admin.register(ProductImage)

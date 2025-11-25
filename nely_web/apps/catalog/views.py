@@ -126,13 +126,32 @@ class CollectionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CollectionSerializer
     permission_classes = [AllowAny]
     lookup_field = 'collection_id'
-    
+
     def get_queryset(self):
         qs = super().get_queryset()
         if self.request.query_params.get('featured') == 'true':
             qs = qs.filter(is_featured=True)
         return qs.order_by('display_order', '-created_at')
-    
+
+    def get_object(self):
+        """Override to support both ID and slug lookups"""
+        lookup_value = self.kwargs.get(self.lookup_field)
+
+        # Try to get by ID first
+        if lookup_value and lookup_value.isdigit():
+            return super().get_object()
+
+        # Otherwise, treat as slug
+        queryset = self.filter_queryset(self.get_queryset())
+        obj = queryset.filter(collection_slug=lookup_value).first()
+
+        if not obj:
+            from rest_framework.exceptions import NotFound
+            raise NotFound(detail="Collection not found")
+
+        self.check_object_permissions(self.request, obj)
+        return obj
+
     @action(detail=True, methods=['get'])
     def products(self, request, collection_id=None):
         collection = self.get_object()
@@ -145,7 +164,7 @@ class CollectionViewSet(viewsets.ReadOnlyModelViewSet):
             data=serializer.data,
             message=f"Products in {collection.collection_name} collection"
         )
-    
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
@@ -290,16 +309,147 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             data=serializer.data,
             message=f"Related to {product.product_name}"
         )
+
+    @action(detail=True, methods=['get'], url_path='see-also')
+    def see_also(self, request, product_id=None):
+        """
+        Get 'See Also' products - products from the same category,
+        excluding the current product and already-related products.
+        """
+        product = self.get_object()
+
+        # Get related product IDs to exclude them
+        related_ids = list(RelatedProduct.objects.filter(
+            product=product
+        ).values_list('related_product_id', flat=True))
+
+        # Exclude current product and related products
+        exclude_ids = [product.product_id] + related_ids
+
+        # Get products from the same category
+        see_also_products = Product.objects.filter(
+            category=product.category,
+            status='active'
+        ).exclude(
+            product_id__in=exclude_ids
+        ).select_related('category', 'clothing_type').prefetch_related(
+            Prefetch(
+                'images',
+                queryset=ProductImage.objects.select_related('color').order_by('-is_primary', 'display_order')
+            ),
+            Prefetch(
+                'variants',
+                queryset=ProductVariant.objects.filter(status='active').select_related('color')
+            )
+        ).order_by('-is_featured', '-is_new_arrival', '-created_at')[:8]
+
+        # Build response with images array for hover effect
+        result = []
+        for p in see_also_products:
+            # Get primary image and additional images
+            all_images = []
+            primary_img = None
+
+            for img in p.images.all():
+                img_url = img.image_url
+                if not img_url and img.image_file:
+                    from apps.core.storage import SupabaseStorage
+                    storage = SupabaseStorage()
+                    filename = img.image_file.name
+                    if '/' in filename:
+                        filename = filename.split('/')[-1]
+                    img_url = storage.url(filename)
+
+                if img_url:
+                    if img.is_primary:
+                        primary_img = img_url
+                    else:
+                        all_images.append(img_url)
+
+            # Put primary first
+            images = []
+            if primary_img:
+                images.append(primary_img)
+            images.extend(all_images)
+            images = images[:3]  # Limit to 3 for hover effect
+
+            # Get default variant ID
+            default_variant = p.variants.first()
+
+            result.append({
+                'id': p.product_id,
+                'slug': p.slug,
+                'name': p.product_name,
+                'base_price': str(p.base_price),
+                'sale_price': str(p.sale_price) if p.sale_price else None,
+                'primary_image': images[0] if images else None,
+                'images': images,
+                'category_name': p.category.category_name if p.category else None,
+                'default_variant_id': default_variant.variant_id if default_variant else None,
+            })
+
+        return APIResponse.success(
+            data=result,
+            message=f"See also products for {product.product_name}"
+        )
     
     @action(detail=True, methods=['get'])
     def variants(self, request, product_id=None):
         product = self.get_object()
         variants = product.variants.select_related('size', 'color').filter(status='active')
+
+        # Filter by color if provided
+        color_id = request.query_params.get('color')
+        if color_id:
+            variants = variants.filter(color_id=color_id)
+
         serializer = ProductVariantSerializer(variants, many=True)
         return APIResponse.success(
             data=serializer.data,
             message=f"Variants for {product.product_name}"
         )
+
+    @action(detail=True, methods=['get'], url_path='variant-by-options')
+    def variant_by_options(self, request, product_id=None):
+        """Get specific variant by color and size"""
+        product = self.get_object()
+        color_id = request.query_params.get('color')
+        size_id = request.query_params.get('size')
+
+        if not color_id or not size_id:
+            return APIResponse.error(
+                message="Both color and size are required",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            variant = product.variants.select_related('size', 'color').get(
+                color_id=color_id,
+                size_id=size_id,
+                status='active'
+            )
+            serializer = ProductVariantSerializer(variant)
+            return APIResponse.success(
+                data=serializer.data,
+                message=f"Variant found"
+            )
+        except ProductVariant.DoesNotExist:
+            return APIResponse.error(
+                message="No variant found with the specified color and size",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        except ProductVariant.MultipleObjectsReturned:
+            # If multiple variants exist (shouldn't happen), return the first one
+            variant = product.variants.select_related('size', 'color').filter(
+                color_id=color_id,
+                size_id=size_id,
+                status='active'
+            ).first()
+            serializer = ProductVariantSerializer(variant)
+            return APIResponse.success(
+                data=serializer.data,
+                message=f"Variant found"
+            )
     
     @action(detail=True, methods=['get'])
     def colors(self, request, product_id=None):
@@ -371,19 +521,17 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         Get products expanded by color variants.
         Returns one "product card" per color variant.
         """
-        from django.db.models import Prefetch
+        from django.db.models import Prefetch, Min
         
-        # Get base products query with filters applied
         products = self.filter_queryset(self.get_queryset())
         
-        # Prefetch variants and images efficiently
         products = products.prefetch_related(
             Prefetch(
                 'variants', 
                 queryset=ProductVariant.objects.select_related('color', 'size').filter(
                     status='active',
                     stock_quantity__gt=0
-                )
+                ).order_by('size__sort_order')  # ✅ Order by size to get consistent "first" variant
             ),
             Prefetch(
                 'images', 
@@ -391,11 +539,9 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             )
         )
         
-        # Expand products by color
         color_variants = []
         
         for product in products:
-            # Get unique colors from variants
             colors_data = {}
             
             for variant in product.variants.all():
@@ -408,56 +554,50 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                     colors_data[color_id] = {
                         'color': variant.color,
                         'sizes': set(),
-                        'stock': 0
+                        'stock': 0,
+                        'default_variant_id': variant.variant_id,  # ✅ First variant for this color
                     }
                 
                 if variant.size:
                     colors_data[color_id]['sizes'].add(variant.size.size_name)
                 colors_data[color_id]['stock'] += variant.stock_quantity
-            
-            # Create a product entry for each color that has stock
+        
             for color_id, color_info in colors_data.items():
                 if color_info['stock'] <= 0:
-                    continue  # Skip colors with no stock
-                    
+                    continue
+
                 color = color_info['color']
-                
-                # ✅ FIXED: Better image retrieval logic
+
+                # Collect ALL images for this color (up to 3 for hover effect)
+                color_images = []
                 primary_img = None
-                fallback_img = None
-                
-                # First, try to find primary image for this color
+
                 for img in product.images.all():
                     if img.color_id == color_id:
-                        if img.is_primary:
-                            primary_img = img
-                            break
-                        elif not fallback_img:
-                            fallback_img = img
-                
-                # Use primary image if found, otherwise use fallback
-                selected_img = primary_img or fallback_img
-                
-                # Get the image URL - handle both file and URL fields
-                image_url = None
-                if selected_img:
-                    if selected_img.image_url:
-                        image_url = selected_img.image_url
-                    elif selected_img.image_file:
-                        # If image_url is empty but file exists, generate URL
-                        from apps.core.storage import SupabaseStorage
-                        storage = SupabaseStorage()
-                        filename = selected_img.image_file.name
-                        if '/' in filename:
-                            filename = filename.split('/')[-1]
-                        image_url = storage.url(filename)
-                
-                # ✅ LOG for debugging
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.info(f"Product: {product.product_name}, Color: {color.color_name}, Image URL: {image_url}")
-                
-                # Build the color variant object
+                        img_url = None
+                        if img.image_url:
+                            img_url = img.image_url
+                        elif img.image_file:
+                            from apps.core.storage import SupabaseStorage
+                            storage = SupabaseStorage()
+                            filename = img.image_file.name
+                            if '/' in filename:
+                                filename = filename.split('/')[-1]
+                            img_url = storage.url(filename)
+
+                        if img_url:
+                            if img.is_primary:
+                                primary_img = img_url
+                            else:
+                                color_images.append(img_url)
+
+                # Put primary image first, then others (limit to 3 total)
+                all_images = []
+                if primary_img:
+                    all_images.append(primary_img)
+                all_images.extend(color_images)
+                all_images = all_images[:3]  # Limit to 3 images for hover zones
+
                 color_variant = {
                     'id': product.product_id,
                     'slug': product.slug,
@@ -465,7 +605,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                     'color_id': color.color_id,
                     'color_name': color.color_name,
                     'color_code': color.color_code or '#CCCCCC',
-                    'primary_image': image_url,  # ✅ Now properly set
+                    'primary_image': all_images[0] if all_images else None,
+                    'images': all_images,  # All images for hover effect
                     'base_price': str(product.base_price),
                     'sale_price': str(product.sale_price) if product.sale_price else None,
                     'available_sizes': sorted(list(color_info['sizes'])),
@@ -475,14 +616,13 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                     'category': product.category.category_name if product.category else None,
                     'season': product.season,
                     'stock_quantity': color_info['stock'],
+                    'default_variant_id': color_info['default_variant_id'],
                 }
-                
+
                 color_variants.append(color_variant)
         
-        # Sort color variants by product name, then by color name
         color_variants.sort(key=lambda x: (x['name'], x['color_name']))
         
-        # Apply pagination
         page = self.paginate_queryset(color_variants)
         if page is not None:
             return self.get_paginated_response(page)

@@ -84,9 +84,30 @@ class CartViewSet(viewsets.ViewSet):
         """
         Returns current cart for authenticated user or session.
         """
+        from django.db.models import Prefetch
+        from apps.catalog.models import ProductImage
+
         cart, _, _ = _load_current_cart(request, create=True)
+
+        # Prefetch related data for better performance
+        cart = ShoppingCart.objects.prefetch_related(
+            Prefetch(
+                'items',
+                queryset=CartItems.objects.select_related(
+                    'variant__product__category',
+                    'variant__color',
+                    'variant__size'
+                ).prefetch_related(
+                    Prefetch(
+                        'variant__product__images',
+                        queryset=ProductImage.objects.select_related('color').order_by('-is_primary', 'display_order')
+                    )
+                )
+            )
+        ).get(pk=cart.pk)
+
         ser = CartSerializer(cart)
-        
+
         # The CartSerializer data will be automatically wrapped by EnvelopeJSONRenderer,
         # but we can also use APIResponse for explicit control
         return APIResponse.success(data=ser.data,message="Current cart")
@@ -97,38 +118,47 @@ class CartViewSet(viewsets.ViewSet):
         Add item to current cart. Body: { "variant": int, "quantity": int }
         If item with same variant exists, increases quantity.
         """
-        cart, _, _ = _load_current_cart(request, create=True)
-        wser = CartItemWriteSerializer(data=request.data)
-        wser.is_valid(raise_exception=True)
-        variant_id = wser.validated_data["variant"]
-        qty = wser.validated_data["quantity"]
+        try:
+            cart, _, _ = _load_current_cart(request, create=True)
+            wser = CartItemWriteSerializer(data=request.data)
+            wser.is_valid(raise_exception=True)
+            variant_id = wser.validated_data["variant"]
+            qty = wser.validated_data["quantity"]
 
-        # Fetch price from ProductVariant to avoid trusting client
-        from catalog.models import ProductVariant
-        variant = get_object_or_404(ProductVariant, pk=variant_id)
-        price = variant.product.base_price
-        
-        if price is None:
+            # Fetch price from ProductVariant to avoid trusting client
+            from apps.catalog.models import ProductVariant
+            variant = get_object_or_404(ProductVariant, pk=variant_id)
+            price = variant.product.base_price
+
+            if price is None:
+                return APIResponse.error(
+                    message="Variant has no price",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            with transaction.atomic():
+                obj, created = CartItems.objects.select_for_update().get_or_create(
+                    cart=cart, variant=variant,
+                    defaults={"quantity": qty, "price": Decimal(price), "added_at": _now()}
+                )
+                if not created:
+                    obj.quantity += qty
+                    obj.save(update_fields=["quantity"])
+                cart.updated_at = _now()
+                cart.save(update_fields=["updated_at"])
+
+            return APIResponse.created(
+                data=CartItemSerializer(obj).data,
+                message="Item added to cart successfully"
+            )
+        except Exception as e:
+            import traceback
+            print("❌ Cart Error:", str(e))
+            print(traceback.format_exc())
             return APIResponse.error(
-                message="Variant has no price",
-                status_code=status.HTTP_400_BAD_REQUEST
+                message=f"Failed to add item to cart: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-        with transaction.atomic():
-            obj, created = CartItems.objects.select_for_update().get_or_create(
-                cart=cart, variant=variant,
-                defaults={"quantity": qty, "price": Decimal(price), "added_at": _now()}
-            )
-            if not created:
-                obj.quantity += qty
-                obj.save(update_fields=["quantity"])
-            cart.updated_at = _now()
-            cart.save(update_fields=["updated_at"])
-
-        return APIResponse.created(
-            data=CartItemSerializer(obj).data,
-            message="Item added to cart successfully"
-        )
 
     @items.mapping.patch
     def update_item(self, request):

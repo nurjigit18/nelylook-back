@@ -89,6 +89,7 @@ class Color(models.Model):
 class Size(models.Model):
     size_id = models.AutoField(primary_key=True)
     size_name = models.CharField(max_length=20, unique=True, verbose_name="Размер")
+    size_code = models.CharField(max_length=5, blank=True, null=True, verbose_name="Буквенный код (S, M, L, XL)")
     size_category = models.CharField(max_length=20, blank=True, null=True, verbose_name="Категория")
     size_group = models.CharField(max_length=20, blank=True, null=True, verbose_name="Классификация")
     sort_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
@@ -99,7 +100,7 @@ class Size(models.Model):
         db_table = 'sizes'
         verbose_name_plural = 'Размеры'
         ordering = ['sort_order', 'size_name']
-    
+
     def __str__(self):
         return self.size_name
 

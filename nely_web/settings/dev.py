@@ -164,14 +164,14 @@ REST_FRAMEWORK.update({
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'
     ],
-    # Relaxed throttling for development
+    # Very relaxed throttling for development
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',           # For anonymous requests
-        'user': '1000/hour',          # For authenticated requests (this was missing!)
-        'login': '20/min',            # More permissive for testing
-        'register': '10/hour',        # More permissive for testing
-        'refresh': '50/min',          # More permissive for testing
-        'change_password': '5/hour',  # Add this for the change password throttle
+        'anon': '10000/hour',         # Very high for development testing
+        'user': '10000/hour',         # Very high for development testing
+        'login': '100/min',           # More permissive for testing
+        'register': '100/hour',       # More permissive for testing
+        'refresh': '100/min',         # More permissive for testing
+        'change_password': '50/hour', # More permissive for testing
     }
 })
 

@@ -80,7 +80,8 @@ class RegisterView(generics.CreateAPIView):
             # Automatically send verification email
             try:
                 verification_token = signer.sign(str(user.id))
-                verification_url = f"https://nelylook.com/verify?token={verification_token}"
+                frontend_url = getattr(settings, "FRONTEND_URL", "https://nelylook.com")
+                verification_url = f"{frontend_url.rstrip('/')}/verify?token={verification_token}"
                 
                 success, result = send_verification_email_sendgrid(
                     user_email=user.email,
@@ -323,7 +324,8 @@ class SendVerificationEmailView(APIView):
         try:
             # 1️⃣ Generate a signed token with user ID
             verification_token = signer.sign(str(user.id))
-            verification_url = f"https://nelylook.com/verify?token={verification_token}"
+            frontend_url = getattr(settings, "FRONTEND_URL", "https://nelylook.com")
+            verification_url = f"{frontend_url.rstrip('/')}/verify?token={verification_token}"
             
             # 2️⃣ Send email using SendGrid
             success, result = send_verification_email_sendgrid(

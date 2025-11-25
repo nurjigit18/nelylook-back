@@ -225,17 +225,18 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "apps.core.exception_handler.custom_exception_handler",  # Custom exception handler
 
     # Throttles (must include base 'user' and 'anon' if classes enabled)
+    # Disabled in DEBUG mode for easier development
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
         "rest_framework.throttling.AnonRateThrottle",
-    ],
+    ] if not DEBUG else [],
     "DEFAULT_THROTTLE_RATES": {
-        "user": "1000/day",
-        "anon": "200/day",
-        "login": "5/min",
-        "register": "3/hour",
-        "refresh": "10/min",
-        "change_password": "5/hour",
+        "user": "10000/day" if DEBUG else "1000/day",
+        "anon": "10000/day" if DEBUG else "200/day",
+        "login": "100/min" if DEBUG else "5/min",
+        "register": "100/hour" if DEBUG else "3/hour",
+        "refresh": "100/min" if DEBUG else "10/min",
+        "change_password": "100/hour" if DEBUG else "5/hour",
     },
 }
 
@@ -310,29 +311,45 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
+        'console': {
+            'level': LOG_LEVEL,
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
             'filename': 'auth.log',
+            'formatter': 'verbose',
         },
     },
     'loggers': {
-        'your_app_name.views': {  # Replace with your app name
-            'handlers': ['file'],
-            'level': 'INFO',
-            'propagate': True,
+        'django.server': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,  # Prevent duplicate logs
         },
+        'apps': {
+            'handlers': ['console', 'file'],
+            'level': LOG_LEVEL,
+            'propagate': False,  # Prevent duplicate logs
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': LOG_LEVEL,
     },
 }
 
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://127.0.0.1:8000')
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.sendgrid.net'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'apikey'  # Leave empty when using IP allowlist
-EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY')  # Leave empty
+# Resend API for transactional emails
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
 DEFAULT_FROM_EMAIL = 'NelyLook <noreply@nelylook.com>'
-SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')

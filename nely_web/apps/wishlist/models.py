@@ -12,7 +12,7 @@ class Wishlists(models.Model):
         null=True, blank=True
     )
     session_id = models.CharField(max_length=255, null=True, blank=True)
-
+    
     variant = models.ForeignKey(
         'catalog.ProductVariant',
         on_delete=models.CASCADE,
