@@ -13,8 +13,9 @@ if not DEBUG:
     REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
         "rest_framework.renderers.JSONRenderer",
     ]
-    
-ALLOWED_HOSTS = ["api.nelylook.com"]
+
+# ALLOWED_HOSTS is already configured in base.py from environment variables
+# No need to override here - base.py reads from ALLOWED_HOSTS env var
 
 # Security settings for production
 SECURE_SSL_REDIRECT = True
@@ -37,19 +38,24 @@ CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
-# CORS settings for production - be restrictive
+# CORS settings for production
+# CORS_ALLOWED_ORIGINS is already configured in base.py from FRONTEND_ORIGINS env var
+# We just ensure CORS_ALLOW_ALL_ORIGINS is False and credentials are allowed
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [
-    "https://nelylook.com",
-    "https://www.nelylook.com",
-]
-
-# Add Railway domain to CORS if available
-RAILWAY_PUBLIC_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN")
-if RAILWAY_PUBLIC_DOMAIN:
-    CORS_ALLOWED_ORIGINS.append(f"https://{RAILWAY_PUBLIC_DOMAIN}")
-
 CORS_ALLOW_CREDENTIALS = True
+
+# Additional CORS headers if needed
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # API Documentation - require authentication in production
 SPECTACULAR_SETTINGS.update({
