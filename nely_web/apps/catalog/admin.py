@@ -3,6 +3,13 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django import forms
 from django.db.models import Count, Q
+from django.shortcuts import render, redirect
+from django.urls import path
+from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
+from django.db import transaction
+import json
 from apps.core.admin_mixins import RoleBasedAdminMixin
 from .models import (
     Category, ClothingType, Product, ProductVariant,
@@ -434,3 +441,191 @@ class RelatedProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     list_filter = ['relation_type']
     search_fields = ['product__product_name', 'related_product__product_name']
     autocomplete_fields = ['product', 'related_product']
+
+
+# ============================================================================
+# CUSTOM ADMIN VIEWS - Easy Product Creator
+# ============================================================================
+
+@staff_member_required
+def easy_product_creator(request):
+    """
+    Custom admin view for easy product creation with color-first workflow
+    """
+    if request.method == 'GET':
+        # Fetch data for the form
+        categories = Category.objects.filter(is_active=True).order_by('category_name')
+        clothing_types = ClothingType.objects.filter(is_active=True).order_by('type_name')
+        colors = Color.objects.filter(is_active=True).order_by('color_name')
+        sizes = Size.objects.filter(is_active=True).order_by('sort_order')
+
+        # Serialize colors and sizes for JavaScript
+        colors_json = json.dumps([{
+            'color_id': c.color_id,
+            'color_name': c.color_name,
+            'color_code': c.color_code
+        } for c in colors])
+
+        sizes_json = json.dumps([{
+            'size_id': s.size_id,
+            'size_name': s.size_name
+        } for s in sizes])
+
+        context = {
+            'title': 'Легкое добавление товара',
+            'categories': categories,
+            'clothing_types': clothing_types,
+            'colors': colors,
+            'colors_json': colors_json,
+            'sizes': sizes,
+            'sizes_json': sizes_json,
+            'site_header': admin.site.site_header,
+            'site_title': admin.site.site_title,
+            'has_permission': True,
+        }
+
+        return render(request, 'admin/catalog/easy_product_creator.html', context)
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def upload_product_image(request):
+    """
+    Upload image to Supabase and return URL
+    """
+    try:
+        if 'file' not in request.FILES:
+            return JsonResponse({'error': 'No file provided'}, status=400)
+
+        uploaded_file = request.FILES['file']
+
+        # Use Supabase storage
+        from apps.core.storage import SupabaseStorage
+        storage = SupabaseStorage()
+
+        # Generate unique filename
+        import uuid
+        from pathlib import Path
+        ext = Path(uploaded_file.name).suffix
+        filename = f"products/{uuid.uuid4().hex}{ext}"
+
+        # Save to Supabase
+        saved_path = storage.save(filename, uploaded_file)
+        image_url = storage.url(saved_path)
+
+        return JsonResponse({
+            'success': True,
+            'url': image_url,
+            'filename': saved_path
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def create_product_easy(request):
+    """
+    API endpoint to handle product creation from Easy Product Creator
+    """
+    try:
+        data = json.loads(request.body)
+
+        with transaction.atomic():
+            # Generate slug from product name
+            from django.utils.text import slugify
+            from unidecode import unidecode
+
+            base_slug = slugify(unidecode(data['product_name']))
+            slug = base_slug
+
+            # Ensure unique slug
+            counter = 1
+            while Product.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+
+            # Create Product
+            product = Product.objects.create(
+                product_name=data['product_name'],
+                slug=slug,
+                category_id=data['category_id'],
+                clothing_type_id=data.get('clothing_type_id'),
+                description=data.get('description', ''),
+                short_description=data.get('short_description', ''),
+                base_price=data['base_price'],
+                sale_price=data.get('sale_price'),
+                season=data.get('season', ''),
+                is_featured=data.get('is_featured', False),
+                is_new_arrival=data.get('is_new_arrival', False),
+                is_bestseller=data.get('is_bestseller', False),
+                status='active'
+            )
+
+            # Create ProductVariants
+            variants_data = data.get('variants', [])
+            for variant_data in variants_data:
+                color_id = variant_data['color_id']
+                for size_data in variant_data['sizes']:
+                    ProductVariant.objects.create(
+                        product=product,
+                        color_id=color_id,
+                        size_id=size_data['size_id'],
+                        stock_quantity=size_data['stock_quantity'],
+                        status='active' if size_data['stock_quantity'] > 0 else 'oos'
+                    )
+
+            # Create ProductImages
+            images_data = data.get('images', [])
+            for image_data in images_data:
+                ProductImage.objects.create(
+                    product=product,
+                    color_id=image_data['color_id'],
+                    image_url=image_data['image_url'],
+                    alt_text=image_data.get('alt_text', product.product_name),
+                    is_primary=image_data.get('is_primary', False),
+                    display_order=image_data.get('display_order', 1),
+                    image_type='product'
+                )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Товар "{product.product_name}" успешно создан!',
+            'product_id': product.product_id,
+            'redirect_url': f'/admin/catalog/product/{product.product_id}/change/'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+# Customize ProductAdmin to add custom URL
+class CustomProductAdmin(ProductAdmin):
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('easy-creator/', easy_product_creator, name='catalog_product_easy_creator'),
+            path('easy-creator/upload/', upload_product_image, name='catalog_product_image_upload'),
+            path('easy-creator/create/', create_product_easy, name='catalog_product_easy_create'),
+        ]
+        return custom_urls + urls
+
+    def changelist_view(self, request, extra_context=None):
+        """Add button to access Easy Product Creator"""
+        extra_context = extra_context or {}
+        extra_context['show_easy_creator_button'] = True
+        return super().changelist_view(request, extra_context=extra_context)
+
+
+# Re-register Product with custom admin
+admin.site.unregister(Product)
+admin.site.register(Product, CustomProductAdmin)
