@@ -15,3 +15,4 @@ pillow
 django-nested-admin
 unidecode
 resend
+django-ratelimit

@@ -6,6 +6,12 @@ from .base import *
 import logging
 import os
 
+# Add security middleware for production
+MIDDLEWARE = MIDDLEWARE + [
+    'nely_web.middleware.api_validation.APIValidationMiddleware',
+    'nely_web.middleware.api_logging.APILoggingMiddleware',
+]
+
 # Force DEBUG to False in production
 DEBUG = False
 
@@ -162,6 +168,13 @@ LOGGING['handlers']['console']['formatter'] = 'production'
 LOGGING['loggers']['django.core.mail'] = {
     'handlers': ['console'],
     'level': 'DEBUG',  # This will help debug email issues
+    'propagate': False,
+}
+
+# Add API security logging
+LOGGING['loggers']['api_security'] = {
+    'handlers': ['console'],
+    'level': 'WARNING',
     'propagate': False,
 }
 
