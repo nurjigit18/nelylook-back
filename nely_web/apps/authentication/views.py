@@ -79,7 +79,7 @@ class RegisterView(generics.CreateAPIView):
             
             # Automatically send verification email
             try:
-                verification_token = signer.sign(str(user.id))
+                verification_token = signer.sign(str(user.user_id))
                 frontend_url = getattr(settings, "FRONTEND_URL", "https://nelylook.com")
                 verification_url = f"{frontend_url.rstrip('/')}/verify?token={verification_token}"
                 
@@ -323,7 +323,7 @@ class SendVerificationEmailView(APIView):
         
         try:
             # 1️⃣ Generate a signed token with user ID
-            verification_token = signer.sign(str(user.id))
+            verification_token = signer.sign(str(user.user_id))
             frontend_url = getattr(settings, "FRONTEND_URL", "https://nelylook.com")
             verification_url = f"{frontend_url.rstrip('/')}/verify?token={verification_token}"
             
@@ -363,24 +363,26 @@ class SendVerificationEmailView(APIView):
 
 class VerifyEmailView(APIView):
     """Verify user email token"""
+    permission_classes = [AllowAny]  # Allow anyone to verify email
+
     def get(self, request):
         token = request.query_params.get("token")
         if not token:
             return Response({"status": "error", "error": "missing token", "message": "Token is missing"}, status=400)
-        
+
         try:
             # 1️⃣ Validate and extract user ID
             user_id = signer.unsign(token, max_age=60 * 60 * 24)  # expires in 24 hours
-            
+
             # 2️⃣ Mark user as verified
             from django.contrib.auth import get_user_model
             User = get_user_model()
-            user = User.objects.filter(id=user_id).first()
+            user = User.objects.filter(user_id=user_id).first()
             if not user:
                 return Response({"status": "error", "error": "Invalid user"}, status=404)
-            
-            user.is_verified = True  # or `user.email_verified = True`
-            user.save(update_fields=["is_verified"])
+
+            user.email_verified = True
+            user.save(update_fields=["email_verified"])
             
             return Response({"status": "success", "message": "Email verified successfully"}, status=200)
         
