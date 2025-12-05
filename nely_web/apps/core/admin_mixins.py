@@ -2,12 +2,33 @@ from django.contrib import admin
 
 class RoleBasedAdminMixin:
     """Mixin to add role-based access control to admin classes"""
-    
+
+    # Define which models managers can access
+    MANAGER_ALLOWED_MODELS = [
+        'product',           # Товары
+        'productvariant',    # Вариации товаров
+        'category',          # Категории
+        'collection',        # Коллекции
+        'color',             # Цвета
+    ]
+
+    def is_manager(self, user):
+        """Check if user is a manager (not superuser, but in 'Manager' group)"""
+        if user.is_superuser:
+            return False
+        return user.groups.filter(name='Manager').exists()
+
     def has_module_permission(self, request):
         """Control who can see this module in admin index"""
         if request.user.is_superuser:
             return True
-            
+
+        # If user is a manager, only show allowed models
+        if self.is_manager(request.user):
+            opts = self.model._meta
+            model_name = opts.model_name.lower()
+            return model_name in self.MANAGER_ALLOWED_MODELS
+
         # Check if user has specific permissions for this model
         opts = self.model._meta
         codename = f'view_{opts.model_name}'

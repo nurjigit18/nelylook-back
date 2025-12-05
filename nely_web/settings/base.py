@@ -93,6 +93,28 @@ INSTALLED_APPS = [
     "django_filters",
     "whitenoise.runserver_nostatic",  # avoid double static handling in dev
 
+    # Wagtail apps
+    'wagtail.contrib.forms',
+    'wagtail.contrib.redirects',
+    'wagtail.embeds',
+    'wagtail.sites',
+    'wagtail.users',
+    'wagtail.snippets',
+    'wagtail.documents',
+    'wagtail.images',
+    'wagtail.search',
+    'wagtail.admin',
+    'wagtail',
+
+    'modelcluster',
+    'taggit',
+
+    # Wagtail API
+    'wagtail.api.v2',
+
+    # Storage
+    'storages',
+
     # Local apps
     "apps.core",
     "apps.authentication",
@@ -102,6 +124,7 @@ INSTALLED_APPS = [
     "apps.orders",
     "apps.payments",
     "apps.media",
+    "apps.cms_content",  # CMS content models
 ]
 
 AUTH_USER_MODEL = "authentication.User"
@@ -116,6 +139,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "corsheaders.middleware.CorsMiddleware",    
+    'wagtail.contrib.redirects.middleware.RedirectMiddleware',
 ]
 
 ROOT_URLCONF = "nely_web.urls"
@@ -123,7 +147,7 @@ ROOT_URLCONF = "nely_web.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],  # add if you keep templates
+        "DIRS": [BASE_DIR.parent / "templates"],  # Custom templates (admin)
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -193,11 +217,11 @@ USE_TZ = True
 
 # --- Static / Media ---
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = BASE_DIR.parent / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR.parent / "static"]  # Custom static files (admin CSS)
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# MEDIA_URL and MEDIA_ROOT are now configured below with Supabase storage
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -264,7 +288,24 @@ SPECTACULAR_SETTINGS = {
 
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-SUPABASE_BUCKET_NAME = os.getenv('SUPABASE_BUCKET', 'products')
+SUPABASE_BUCKET_NAME = os.getenv('SUPABASE_BUCKET', 'product-images')
+
+# Supabase Storage Configuration for Wagtail (S3-compatible)
+# Extract project ID from Supabase URL
+if SUPABASE_URL:
+    supabase_project_id = SUPABASE_URL.replace('https://', '').split('.')[0]
+else:
+    supabase_project_id = ''
+
+# Configure custom Supabase storage backend (using native Python client)
+DEFAULT_FILE_STORAGE = 'apps.core.storage_backends.SupabaseStorage'
+
+# For Wagtail images specifically, store in cms-images folder
+AWS_LOCATION = 'cms-images'
+
+# Media files configuration (use Supabase)
+MEDIA_URL = f'https://{supabase_project_id}.supabase.co/storage/v1/object/public/{SUPABASE_BUCKET_NAME}/{AWS_LOCATION}/'
+MEDIA_ROOT = ''  # Not used with Supabase storage
 
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
@@ -353,3 +394,7 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://127.0.0.1:8000')
 # Resend API for transactional emails
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
 DEFAULT_FROM_EMAIL = 'NelyLook <noreply@nelylook.com>'
+
+# CMS settings
+WAGTAIL_SITE_NAME = 'Nely Look CMS'
+WAGTAILADMIN_BASE_URL = 'https://api.nelylook.com'

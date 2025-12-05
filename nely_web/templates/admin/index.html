@@ -1,0 +1,160 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block content %}
+<div style="padding: 20px;">
+
+    {% if show_dashboard %}
+
+    <!-- Welcome Section -->
+    <div style="background: #f8f8f8; border: 1px solid #ccc; padding: 20px; margin-bottom: 20px;">
+        <h1 style="margin: 0 0 10px 0; font-size: 24px; color: #333;">Добро пожаловать в NelyLook Admin</h1>
+        <p style="margin: 0; font-size: 14px; color: #666;">Панель управления контентом и товарами</p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+
+        <div style="background: white; padding: 15px; border: 1px solid #ccc;">
+            <div style="color: #666; font-size: 13px; margin-bottom: 5px;">📦 Всего товаров</div>
+            <div style="font-size: 28px; font-weight: bold; color: #333;">{{ stats.total_products }}</div>
+            <div style="color: #666; font-size: 11px; margin-top: 5px;">{{ stats.active_products }} активных</div>
+        </div>
+
+        <div style="background: white; padding: 15px; border: 1px solid #ccc;">
+            <div style="color: #666; font-size: 13px; margin-bottom: 5px;">🎨 Артикулы</div>
+            <div style="font-size: 28px; font-weight: bold; color: #333;">{{ stats.total_color_variants }}</div>
+            <div style="color: #666; font-size: 11px; margin-top: 5px;">Модели × Цвета</div>
+        </div>
+
+        <div style="background: white; padding: 15px; border: 1px solid #ccc;">
+            <div style="color: #666; font-size: 13px; margin-bottom: 5px;">⚠️ Низкий остаток</div>
+            <div style="font-size: 28px; font-weight: bold; color: #c00;">{{ stats.low_stock_variants }}</div>
+            <div style="color: #666; font-size: 11px; margin-top: 5px;">{{ stats.out_of_stock }} закончились</div>
+        </div>
+
+        <div style="background: white; padding: 15px; border: 1px solid #ccc;">
+            <div style="color: #666; font-size: 13px; margin-bottom: 5px;">⭐ Избранное</div>
+            <div style="font-size: 28px; font-weight: bold; color: #333;">{{ stats.featured_products }}</div>
+            <div style="color: #666; font-size: 11px; margin-top: 5px;">{{ stats.new_arrivals }} новинок</div>
+        </div>
+
+    </div>
+
+    <!-- Quick Actions -->
+    <div style="background: white; padding: 20px; border: 1px solid #ccc; margin-bottom: 20px;">
+        <h2 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">⚡ Быстрые действия</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+
+            <a href="/admin/catalog/product/easy-creator/" class="button" style="display: block; padding: 10px; text-align: center;">
+                ⚡ Легкое добавление товара
+            </a>
+
+            <a href="{% url 'admin:catalog_product_changelist' %}" class="button" style="display: block; padding: 10px; text-align: center;">
+                📋 Все товары
+            </a>
+
+            <a href="{% url 'admin:catalog_collection_changelist' %}" class="button" style="display: block; padding: 10px; text-align: center;">
+                🏷️ Коллекции
+            </a>
+
+            <a href="{% url 'admin:catalog_category_changelist' %}" class="button" style="display: block; padding: 10px; text-align: center;">
+                📁 Категории
+            </a>
+
+        </div>
+    </div>
+
+    <!-- Recent Products & Alerts -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+
+        <!-- Recent Products -->
+        <div style="background: white; padding: 15px; border: 1px solid #ccc;">
+            <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📦 Последние товары ({{ recent_products|length }})</h2>
+            {% if recent_products %}
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tbody>
+                        {% for product in recent_products %}
+                            <tr style="border-bottom: 1px solid #f0f0f0;">
+                                <td style="padding: 10px 0;">
+                                    <a href="{% url 'admin:catalog_product_change' product.product_id %}" style="color: #007bff; text-decoration: none; font-weight: 500;">
+                                        {{ product.product_name }}
+                                    </a>
+                                    <div style="font-size: 12px; color: #666;">{{ product.category.category_name|default:"Без категории" }}</div>
+                                    {% if product.colors_sizes %}
+                                    <div style="font-size: 11px; color: #999; margin-top: 3px;">
+                                        {{ product.colors_sizes|safe }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 10px 0; text-align: right;">
+                                    <span style="background: #e3f2fd; color: #1976d2; padding: 3px 8px; border-radius: 4px; font-size: 12px;">
+                                        {{ product.base_price }} с
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p style="color: #999; text-align: center; padding: 20px;">Нет товаров</p>
+            {% endif %}
+        </div>
+
+        <!-- Low Stock Alerts -->
+        <div style="background: white; padding: 15px; border: 1px solid #ccc;">
+            <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">⚠️ Заканчиваются товары ({{ low_stock_items|length }})</h2>
+            {% if low_stock_items %}
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tbody>
+                        {% for variant in low_stock_items %}
+                            <tr style="border-bottom: 1px solid #f0f0f0;">
+                                <td style="padding: 10px 0;">
+                                    <a href="{% url 'admin:catalog_productvariant_change' variant.variant_id %}" style="color: #dc3545; text-decoration: none; font-weight: 500;">
+                                        {{ variant.product.product_name }}
+                                    </a>
+                                    <div style="font-size: 12px; color: #666;">
+                                        {{ variant.color.color_name|default:"Без цвета" }} / {{ variant.size.size_name|default:"Без размера" }}
+                                    </div>
+                                    {% if variant.sku %}
+                                    <div style="font-size: 11px; color: #999; margin-top: 3px;">
+                                        <strong>Баркод:</strong> {{ variant.sku }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 10px 0; text-align: right;">
+                                    <span style="background: #fff3cd; color: #856404; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">
+                                        {{ variant.stock_quantity }} шт
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p style="color: #28a745; text-align: center; padding: 20px;">✅ Все товары в наличии</p>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- Help Section -->
+    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin-top: 30px; border-radius: 4px;">
+        <h3 style="margin: 0 0 10px 0; color: #856404; font-size: 16px;">💡 Инструкция по работе</h3>
+        <ol style="margin: 10px 0 0 0; padding-left: 20px; color: #856404;">
+            <li style="margin-bottom: 8px;"><strong>Легкое добавление товара:</strong> Нажмите кнопку "⚡ Легкое добавление товара" → Заполните все поля в одной форме (основная информация, вариации, фото) → Сохраните</li>
+            <li style="margin-bottom: 8px;"><strong>Управление коллекциями:</strong> Коллекции → Выбрать коллекцию → Добавить товары через "Товары в коллекции"</li>
+            <li style="margin-bottom: 8px;"><strong>Загрузка фото:</strong> При создании товара → В разделе "Фотографии товара" выберите цвет → Загрузите файл → Отметьте "Основное фото"</li>
+            <li><strong>Управление контентом:</strong> Для изменения баннеров и текста на сайте используйте <a href="/cms/" style="color: #856404; font-weight: bold;">Wagtail CMS</a></li>
+        </ol>
+    </div>
+
+    {% endif %}
+
+</div>
+{% endblock %}

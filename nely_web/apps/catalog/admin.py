@@ -201,10 +201,10 @@ class SizeAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
 @admin.register(Product)
 class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     list_display = [
-        'product_name', 'product_code', 'category', 'clothing_type', 
-        'base_price', 'status', 'stock_quantity', 'is_featured', 'is_new_arrival',
-        'color_count', 'image_count'
+        'image_count', 'product_name', 'product_code', 'category',
+        'base_price', 'sale_price', 'stock_quantity', 'get_colors', 'get_sizes', 'get_barcodes'
     ]
+    list_editable = ['base_price', 'sale_price', 'stock_quantity']
     list_filter = [
         'status', 'category', 'clothing_type', 'season',
         'is_featured', 'is_new_arrival', 'is_bestseller'
@@ -215,16 +215,20 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     
     fieldsets = (
         ('📋 Базовая информация', {
-            'fields': ('product_name', 'product_code', 'slug', 'description', 'short_description')
+            'fields': ('product_name', 'product_code', 'slug', 'description', 'short_description'),
+            'description': '<strong>Шаг 1:</strong> Введите название и описание товара. Slug создастся автоматически.'
         }),
         ('📁 Категории', {
-            'fields': ('category', 'clothing_type', 'season')
+            'fields': ('category', 'clothing_type', 'season'),
+            'description': 'Выберите категорию и тип одежды для правильной классификации товара.'
         }),
         ('💰 Цена', {
-            'fields': ('base_price', 'sale_price', 'cost_price')
+            'fields': ('base_price', 'sale_price', 'cost_price'),
+            'description': '<strong>Базовая цена</strong> - обычная цена. <strong>Цена со скидкой</strong> - если товар по акции (необязательно).'
         }),
         ('⭐ Отметки', {
-            'fields': ('is_featured', 'is_new_arrival', 'is_bestseller', 'status')
+            'fields': ('is_featured', 'is_new_arrival', 'is_bestseller', 'status'),
+            'description': '<strong>Избранное</strong> - показывать на главной. <strong>Новинка</strong> - метка "NEW". <strong>Бестселлер</strong> - популярный товар.'
         }),
     )
     
@@ -255,12 +259,144 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     color_count.short_description = 'Цвета'
     
     def image_count(self, obj):
+        """Display product image preview"""
+        # Get the first primary image or any first image
+        primary_image = obj.images.filter(is_primary=True).first()
+        if not primary_image:
+            primary_image = obj.images.first()
+
         count = obj.images.count()
-        if count > 0:
-            return format_html('✓ {} фото', count)
-        return format_html('<span style="color: orange;">Нет фото</span>')
+
+        if primary_image and primary_image.image_url:
+            # Show thumbnail with count
+            return format_html(
+                '<div style="display: flex; align-items: center; gap: 8px;">'
+                '<img src="{}" style="width: 100px; height: 100px; object-fit: cover; '
+                'border-radius: 4px; border: 1px solid #ddd;" />'
+                '<span style="font-size: 11px; color: #666;">{} фото</span>'
+                '</div>',
+                primary_image.image_url,
+                count
+            )
+        elif count > 0:
+            return format_html('<span style="color: #666;">✓ {} фото</span>', count)
+        else:
+            return format_html('<span style="color: #999;">Нет фото</span>')
+
     image_count.short_description = 'Фото'
-    
+
+    def get_colors(self, obj):
+        """Display all colors with color swatches"""
+        variants = obj.variants.select_related('color').filter(color__isnull=False)
+        colors = {}
+
+        for variant in variants:
+            color = variant.color
+            if color and color.color_id not in colors:
+                colors[color.color_id] = color
+
+        if not colors:
+            return format_html('<span style="color: #999;">—</span>')
+
+        color_badges = []
+        for color in colors.values():
+            if color.color_code:
+                # Show color swatch with hex code
+                color_badges.append(
+                    f'<span style="display: inline-flex; align-items: center; margin: 2px 4px 2px 0;">'
+                    f'<span style="display: inline-block; width: 16px; height: 16px; '
+                    f'background: {color.color_code}; border: 1px solid #ccc; border-radius: 3px; '
+                    f'margin-right: 4px;"></span>'
+                    f'<span style="font-size: 11px;">{color.color_name}</span>'
+                    f'</span>'
+                )
+            else:
+                # Show just color name
+                color_badges.append(
+                    f'<span style="font-size: 11px; margin-right: 8px;">{color.color_name}</span>'
+                )
+
+        return format_html(''.join(color_badges))
+    get_colors.short_description = 'Цвета'
+
+    def get_sizes(self, obj):
+        """Display all unique sizes"""
+        sizes = obj.variants.filter(size__isnull=False).values_list('size__size_name', flat=True)
+
+        # Convert to set to ensure uniqueness, then to list
+        unique_sizes = list(set(sizes))
+
+        if not unique_sizes:
+            return format_html('<span style="color: #999;">—</span>')
+
+        # Sort sizes in logical ascending order
+        def size_sort_key(size):
+            # Standard size order
+            size_order = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
+
+            # If it's a standard size, use its index
+            if size in size_order:
+                return (0, size_order.index(size), '')
+
+            # If it's a numeric size, sort numerically
+            try:
+                numeric_value = float(size)
+                return (1, numeric_value, '')
+            except (ValueError, TypeError):
+                pass
+
+            # Otherwise sort alphabetically
+            return (2, 0, str(size))
+
+        sorted_sizes = sorted(unique_sizes, key=size_sort_key)
+
+        size_badges = []
+        for size in sorted_sizes:
+            size_badges.append(
+                f'<span style="background: #e3f2fd; color: #1976d2; padding: 2px 6px; '
+                f'border-radius: 3px; font-size: 11px; margin-right: 4px;">{size}</span>'
+            )
+
+        return format_html(''.join(size_badges))
+    get_sizes.short_description = 'Размеры'
+
+    def get_barcodes(self, obj):
+        """Display barcodes grouped by color"""
+        variants = obj.variants.select_related('color').filter(sku__isnull=False).order_by('color__color_name', 'size__sort_order')
+
+        if not variants:
+            return format_html('<span style="color: #999;">—</span>')
+
+        # Group by color
+        by_color = {}
+        for variant in variants:
+            color_name = variant.color.color_name if variant.color else "Без цвета"
+            if color_name not in by_color:
+                by_color[color_name] = []
+            by_color[color_name].append(variant.sku)
+
+        # Build display
+        barcode_lines = []
+        for color_name, barcodes in by_color.items():
+            barcode_count = len(barcodes)
+            first_barcode = barcodes[0]
+
+            if barcode_count == 1:
+                barcode_lines.append(
+                    f'<div style="font-size: 11px; margin: 2px 0;">'
+                    f'<strong>{color_name}:</strong> {first_barcode}'
+                    f'</div>'
+                )
+            else:
+                barcode_lines.append(
+                    f'<div style="font-size: 11px; margin: 2px 0;">'
+                    f'<strong>{color_name}:</strong> {first_barcode} <span style="color: #999;">(+{barcode_count-1})</span>'
+                    f'</div>'
+                )
+
+        return format_html(''.join(barcode_lines))
+    get_barcodes.short_description = 'Баркоды'
+
     def save_model(self, request, obj, form, change):
         """
         Add helpful message after saving
@@ -295,14 +431,39 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
 @admin.register(ProductVariant)
 class ProductVariantAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
     list_display = [
-        'sku', 'product', 'size', 'color', 
+        'sku', 'product', 'size', 'get_color_display',
         'stock_quantity', 'status'
     ]
     list_editable = ['stock_quantity']
     list_filter = ['status', 'product__category', 'size', 'color']
-    search_fields = ['sku', 'product__product_name', 'barcode']
+    search_fields = ['sku', 'product__product_name']
     readonly_fields = ['sku']
-    
+
+    def get_color_display(self, obj):
+        """Display color with color swatch"""
+        if not obj.color:
+            return format_html('<span style="color: #999;">—</span>')
+
+        color = obj.color
+        if color.color_code:
+            # Show color swatch with name
+            return format_html(
+                '<span style="display: inline-flex; align-items: center;">'
+                '<span style="display: inline-block; width: 20px; height: 20px; '
+                'background: {}; border: 1px solid #ccc; border-radius: 3px; '
+                'margin-right: 6px;"></span>'
+                '<span>{}</span>'
+                '</span>',
+                color.color_code,
+                color.color_name
+            )
+        else:
+            # Show just color name
+            return color.color_name
+
+    get_color_display.short_description = 'Цвет'
+    get_color_display.admin_order_field = 'color'  # Allow sorting by color
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
             'product', 'size', 'color'
@@ -311,7 +472,7 @@ class ProductVariantAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
 
 @admin.register(Collection)
 class CollectionAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
-    list_display = ['collection_name', 'collection_slug', 'product_count', 'is_featured', 'is_active', 'display_order', 'created_at']
+    list_display = ['collection_name', 'collection_slug', 'product_count', 'banner_preview', 'is_featured', 'is_active', 'display_order']
     list_filter = ['is_featured', 'is_active']
     search_fields = ['collection_name', 'collection_slug', 'description']
     prepopulated_fields = {'collection_slug': ('collection_name',)}
@@ -319,23 +480,35 @@ class CollectionAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
 
     fieldsets = (
         ('📋 Основная информация', {
-            'fields': ('collection_name', 'collection_slug', 'description')
+            'fields': ('collection_name', 'collection_slug', 'description'),
+            'description': '<strong>Название</strong> - отображается на сайте. <strong>Slug</strong> - используется в URL (например: /collections/spring-2025).'
         }),
         ('🖼️ Баннер', {
             'fields': ('banner_image',),
-            'description': 'URL изображения баннера для страницы коллекции'
+            'description': '⚠️ <strong>Важно:</strong> Для изменения баннера коллекции используйте <a href="/cms/" target="_blank">Wagtail CMS</a>. '
+                          'Там вы можете загрузить красивое изображение для hero-баннера коллекции.'
         }),
         ('⚙️ Настройки', {
-            'fields': ('is_featured', 'is_active', 'display_order')
+            'fields': ('is_featured', 'is_active', 'display_order'),
+            'description': '<strong>Избранное</strong> - показывать на главной странице. <strong>Активна</strong> - доступна на сайте.'
         }),
     )
 
     def product_count(self, obj):
         count = obj.collection_products.count()
         if count > 0:
-            return format_html('<span style="color: green;">{} товаров</span>', count)
-        return format_html('<span style="color: orange;">Нет товаров</span>')
+            return format_html('<span style="color: green; font-weight: bold;">{} товаров</span>', count)
+        return format_html('<span style="color: orange;">⚠️ Нет товаров</span>')
     product_count.short_description = 'Товары'
+
+    def banner_preview(self, obj):
+        if obj.banner_image:
+            return format_html(
+                '<img src="{}" style="max-height: 40px; max-width: 80px; border-radius: 4px; object-fit: cover;" />',
+                obj.banner_image
+            )
+        return format_html('<span style="color: #999;">Нет баннера</span>')
+    banner_preview.short_description = 'Баннер'
 
 
 @admin.register(ProductImage)
@@ -629,3 +802,75 @@ class CustomProductAdmin(ProductAdmin):
 # Re-register Product with custom admin
 admin.site.unregister(Product)
 admin.site.register(Product, CustomProductAdmin)
+
+
+# ============================================================================
+# CUSTOM ADMIN INDEX WITH DASHBOARD
+# ============================================================================
+
+# Monkey-patch the admin site index to add dashboard data
+_original_index = admin.site.index
+
+def custom_index(self, request, extra_context=None):
+    """
+    Custom index page with dashboard statistics
+    """
+    # Get statistics
+    # Calculate total color variants (unique product-color combinations)
+    total_color_variants = ProductVariant.objects.values('product', 'color').distinct().count()
+
+    stats = {
+        'total_products': Product.objects.count(),
+        'active_products': Product.objects.filter(status='active').count(),
+        'low_stock_variants': ProductVariant.objects.filter(
+            stock_quantity__lte=5,
+            stock_quantity__gt=0
+        ).count(),
+        'out_of_stock': ProductVariant.objects.filter(stock_quantity=0).count(),
+        'total_color_variants': total_color_variants,  # Models × Colors
+        'featured_products': Product.objects.filter(is_featured=True).count(),
+        'new_arrivals': Product.objects.filter(is_new_arrival=True).count(),
+    }
+
+    # Recent products - force evaluation to list with colors and sizes
+    recent_products_qs = Product.objects.select_related('category').order_by('-created_at')[:5]
+    recent_products = []
+
+    for product in recent_products_qs:
+        # Get all unique colors and sizes for this product
+        variants = ProductVariant.objects.filter(product=product).select_related('color', 'size')
+
+        colors = set()
+        sizes = set()
+
+        for variant in variants:
+            if variant.color:
+                colors.add(variant.color.color_name)
+            if variant.size:
+                sizes.add(variant.size.size_name)
+
+        # Format as "<strong>Цвета:</strong> Красный, Синий | <strong>Размеры:</strong> S, M, L"
+        colors_str = ", ".join(sorted(colors)) if colors else "—"
+        sizes_str = ", ".join(sorted(sizes, key=lambda x: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].index(x) if x in ['XS', 'S', 'M', 'L', 'XL', 'XXL'] else 999)) if sizes else "—"
+
+        product.colors_sizes = f"<strong>Цвета:</strong> {colors_str} | <strong>Размеры:</strong> {sizes_str}"
+        recent_products.append(product)
+
+    # Low stock alerts - force evaluation to list
+    low_stock_items = list(ProductVariant.objects.filter(
+        stock_quantity__lte=5,
+        stock_quantity__gt=0
+    ).select_related('product', 'color', 'size').order_by('stock_quantity')[:10])
+
+    extra_context = extra_context or {}
+    extra_context.update({
+        'stats': stats,
+        'recent_products': recent_products,
+        'low_stock_items': low_stock_items,
+        'show_dashboard': True,
+    })
+
+    return _original_index(request, extra_context)
+
+# Apply the custom index
+admin.site.index = lambda request, extra_context=None: custom_index(admin.site, request, extra_context)

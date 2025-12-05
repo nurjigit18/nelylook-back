@@ -213,22 +213,21 @@ class ProductVariant(models.Model):
         related_name='variants',
         verbose_name='Модель'
     )   
-    sku = models.CharField(unique=True, max_length=100, blank=True, verbose_name="Артикул")
+    sku = models.CharField(unique=True, max_length=100, blank=True, verbose_name="Баркод")
     size = models.ForeignKey(
         Size,
         on_delete=models.PROTECT,
         blank=True, null=True,
         related_name='variants',
         verbose_name='Размер'
-    )    
+    )
     color = models.ForeignKey(
         Color,
         on_delete=models.PROTECT,
         blank=True, null=True,
         related_name='variants',
         verbose_name='Цвет'
-    )    
-    barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="Баркод")
+    )
     stock_quantity = models.IntegerField(default=0, verbose_name="В наличии")
     low_stock_threshold = models.IntegerField(default=10, verbose_name="Мин. в наличии")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE, verbose_name='Статус')

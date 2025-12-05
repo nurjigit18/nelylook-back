@@ -387,15 +387,6 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="clothing_type">Тип одежды</label>
-                    <select id="clothing_type" name="clothing_type">
-                        <option value="">Выберите тип</option>
-                        {% for type in clothing_types %}
-                        <option value="{{ type.type_id }}">{{ type.type_name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
             </div>
 
             <div class="form-group">
@@ -948,7 +939,7 @@ document.getElementById('easy-product-form').addEventListener('submit', async fu
         const formData = {
             product_name: document.getElementById('product_name').value,
             category_id: parseInt(document.getElementById('category').value),
-            clothing_type_id: document.getElementById('clothing_type').value ? parseInt(document.getElementById('clothing_type').value) : null,
+            clothing_type_id: null,
             description: document.getElementById('description').value,
             short_description: document.getElementById('short_description').value,
             base_price: parseFloat(document.getElementById('base_price').value),
