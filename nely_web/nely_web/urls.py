@@ -9,7 +9,7 @@ from wagtail.documents import urls as wagtaildocs_urls
 from apps.authentication.views import (
     RegisterView, LoginView, RefreshView, LogoutView, MeView, ChangePasswordView, ValidateTokenView
 )
-from apps.cms_content.api import api_router, social_links_api
+from apps.cms_content.api import api_router, social_links_api, contact_info_api
 
 # Secure API documentation views (require admin login)
 class SecureSpectacularAPIView(SpectacularAPIView):
@@ -46,4 +46,5 @@ urlpatterns = [
     # Wagtail CMS API endpoints
     path("api/v2/", api_router.urls),  # Wagtail pages, images, documents API
     path("api/cms/social-links/", social_links_api, name="social-links"),  # Custom social links endpoint
+    path("api/cms/contact-info/", contact_info_api, name="contact-info"),  # Custom contact info endpoint
 ]

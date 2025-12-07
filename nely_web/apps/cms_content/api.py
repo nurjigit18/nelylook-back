@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from wagtail.images import get_image_model
-from .models import SocialLink
+from .models import SocialLink, ContactInformation
 
 
 # Custom API views with AllowAny permission (public access)
@@ -107,6 +107,44 @@ api_router = WagtailAPIRouter('wagtailapi')
 api_router.register_endpoint('pages', PublicPagesAPIViewSet)
 api_router.register_endpoint('images', PublicImagesAPIViewSet)
 api_router.register_endpoint('documents', PublicDocumentsAPIViewSet)
+
+
+# Custom API endpoint for contact information
+@api_view(['GET'])
+@permission_classes([AllowAny])  # Public endpoint
+def contact_info_api(request):
+    """
+    API endpoint for contact information
+    Returns the contact information managed in Wagtail CMS
+
+    Example response:
+    {
+        "address": "ул. Токтогула 123\nБишкек, Кыргызстан",
+        "phones": "+996 708 200 125\n+996 708 268 626",
+        "emails": "info@nelylook.com\nsupport@nelylook.com",
+        "working_hours": "Пн-Пт: 10:00 - 20:00\nСб-Вс: 11:00 - 19:00",
+        "social_media": {
+            "whatsapp": "https://wa.me/996708200125",
+            "telegram": "https://t.me/nelylook",
+            "instagram": "https://instagram.com/nelylook"
+        }
+    }
+    """
+    contact = ContactInformation.load()
+
+    data = {
+        'address': contact.address,
+        'phones': contact.phones,
+        'emails': contact.emails,
+        'working_hours': contact.working_hours,
+        'social_media': {
+            'whatsapp': contact.whatsapp_url,
+            'telegram': contact.telegram_url,
+            'instagram': contact.instagram_url,
+        }
+    }
+
+    return Response(data)
 
 
 # Custom API endpoint for social links
