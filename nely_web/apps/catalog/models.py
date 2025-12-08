@@ -118,9 +118,51 @@ class Collection(models.Model):
     class Meta:
         db_table = 'collections'
         verbose_name_plural = 'Коллекции'
-    
+
     def __str__(self):
         return self.collection_name
+
+    def save(self, *args, **kwargs):
+        # Optimize banner image if it's a new upload (strip EXIF data for faster processing)
+        if self.banner_image and hasattr(self.banner_image, 'file'):
+            try:
+                from PIL import Image
+                from io import BytesIO
+                from django.core.files.uploadedfile import InMemoryUploadedFile
+                import sys
+
+                # Open the image
+                img = Image.open(self.banner_image)
+
+                # Only process JPEG images to strip EXIF data
+                if img.format == 'JPEG':
+                    # Create output buffer
+                    output = BytesIO()
+
+                    # Save without EXIF data (data=None removes EXIF)
+                    img.save(
+                        output,
+                        format='JPEG',
+                        quality=90,  # High quality, no reprocessing
+                        optimize=False,  # Skip optimization for speed
+                        exif=b''  # Remove EXIF data
+                    )
+                    output.seek(0)
+
+                    # Replace the file with EXIF-free version
+                    self.banner_image = InMemoryUploadedFile(
+                        output,
+                        'ImageField',
+                        self.banner_image.name,
+                        'image/jpeg',
+                        sys.getsizeof(output),
+                        None
+                    )
+            except Exception:
+                # If optimization fails, just use original
+                pass
+
+        super().save(*args, **kwargs)
 
 class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
