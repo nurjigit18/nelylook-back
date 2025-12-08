@@ -485,8 +485,7 @@ class CollectionAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
         }),
         ('🖼️ Баннер', {
             'fields': ('banner_image',),
-            'description': '⚠️ <strong>Важно:</strong> Для изменения баннера коллекции используйте <a href="/cms/" target="_blank">Wagtail CMS</a>. '
-                          'Там вы можете загрузить красивое изображение для hero-баннера коллекции.'
+            'description': '<strong>Загрузите изображение для баннера коллекции.</strong> Рекомендуемый размер: 1920x600px.'
         }),
         ('⚙️ Настройки', {
             'fields': ('is_featured', 'is_active', 'display_order'),
@@ -505,7 +504,7 @@ class CollectionAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
         if obj.banner_image:
             return format_html(
                 '<img src="{}" style="max-height: 40px; max-width: 80px; border-radius: 4px; object-fit: cover;" />',
-                obj.banner_image
+                obj.banner_image.url
             )
         return format_html('<span style="color: #999;">Нет баннера</span>')
     banner_preview.short_description = 'Баннер'

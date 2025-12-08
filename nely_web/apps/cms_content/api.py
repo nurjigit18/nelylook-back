@@ -160,7 +160,7 @@ def social_links_api(request):
         "data": [
             {
                 "platform": "instagram",
-                "url": "https://instagram.com/nelylook",
+                "url": "https://instagram.com/nely.look",
                 "display_order": 0
             },
             ...

@@ -347,63 +347,6 @@ class TermsPage(Page):
 
 
 # ============================================================
-# COLLECTION PAGE
-# ============================================================
-
-class CollectionPage(Page):
-    """Collection page with hero banner"""
-
-    # Hero section
-    hero_image = models.ForeignKey(
-        'wagtailimages.Image',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='+',
-        help_text="Collection hero image (recommended size: 1920x600px)"
-    )
-
-    hero_title = models.CharField(
-        max_length=200,
-        blank=True,
-        help_text="Hero title (leave blank to use page title)"
-    )
-
-    hero_description = RichTextField(
-        blank=True,
-        help_text="Hero description text"
-    )
-
-    # Collection slug/identifier (to match with Django collections)
-    collection_slug = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Collection identifier (e.g., 'spring-2025', 'evening', 'everyday'). Must match your Django collection slug."
-    )
-
-    content_panels = Page.content_panels + [
-        MultiFieldPanel([
-            FieldPanel('hero_image'),
-            FieldPanel('hero_title'),
-            FieldPanel('hero_description'),
-        ], heading="🖼️ Hero Section"),
-
-        FieldPanel('collection_slug', help_text="⚠️ Important: This must match the collection slug in your Django catalog"),
-    ]
-
-    api_fields = [
-        APIField('hero_image', serializer=ImageRenditionField('fill-1920x600')),
-        APIField('hero_title'),
-        APIField('hero_description'),
-        APIField('collection_slug'),
-    ]
-
-    class Meta:
-        verbose_name = "Collection Page"
-        verbose_name_plural = "Collection Pages"
-
-
-# ============================================================
 # CONTACT INFORMATION (Snippet)
 # ============================================================
 
@@ -457,7 +400,7 @@ class ContactInformation(models.Model):
     instagram_url = models.URLField(
         blank=True,
         verbose_name="Instagram",
-        help_text="Например: https://instagram.com/nelylook"
+        help_text="Например: https://instagram.com/nely.look"
     )
 
     panels = [

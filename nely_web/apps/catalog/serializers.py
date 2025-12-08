@@ -350,6 +350,7 @@ class CollectionSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="collection_name")
     slug = serializers.CharField(source="collection_slug")
     product_count = serializers.SerializerMethodField()
+    banner_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Collection
@@ -359,7 +360,16 @@ class CollectionSerializer(serializers.ModelSerializer):
             "is_active", "created_at", "product_count"
         ]
         read_only_fields = ("created_at",)
-    
+
+    def get_banner_image(self, obj):
+        """Return full URL for banner image."""
+        if obj.banner_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.banner_image.url)
+            return obj.banner_image.url
+        return None
+
     def get_product_count(self, obj):
         """Count of active products in collection."""
         return obj.collection_products.filter(

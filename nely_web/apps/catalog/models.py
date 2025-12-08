@@ -109,7 +109,7 @@ class Collection(models.Model):
     collection_name = models.CharField(max_length=100, verbose_name="Коллекция")
     collection_slug = models.CharField(unique=True, max_length=255, verbose_name='URL-идентификатор')
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
-    banner_image = models.CharField(max_length=500, blank=True, null=True)
+    banner_image = models.ImageField(upload_to='collections/banners/', blank=True, null=True, verbose_name="Баннер коллекции")
     is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     display_order = models.IntegerField(blank=True, null=True, verbose_name="Приоритет")
     is_active = models.BooleanField(default=True, verbose_name="В наличии")
