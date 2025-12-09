@@ -171,7 +171,9 @@ class Product(models.Model):
     slug = models.SlugField(unique=True, max_length=255, verbose_name='URL-идентификатор')
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
     short_description = models.TextField(blank=True, null=True, verbose_name="Краткое описание")
-    
+    fabric_composition = models.TextField(blank=True, null=True, verbose_name="Состав")
+    care_instructions = models.TextField(blank=True, null=True, verbose_name="Уход")
+
     # Fixed foreign key references
     category = models.ForeignKey(
         Category, 
@@ -191,7 +193,7 @@ class Product(models.Model):
     season = models.CharField(max_length=10, choices=Season.choices, default=Season.ALL, verbose_name="Сезон")
     base_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Базовая цена")
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Цена по скидке")
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Расходная цена")
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="Себестоимость")
     is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     is_new_arrival = models.BooleanField(default=False, verbose_name="Новое")
     is_bestseller = models.BooleanField(default=False, verbose_name="Популярное")

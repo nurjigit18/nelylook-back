@@ -218,6 +218,10 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
             'fields': ('product_name', 'product_code', 'slug', 'description', 'short_description'),
             'description': '<strong>Шаг 1:</strong> Введите название и описание товара. Slug создастся автоматически.'
         }),
+        ('🧵 Состав и уход', {
+            'fields': ('fabric_composition', 'care_instructions'),
+            'description': '<strong>Состав</strong> - материалы ткани (например: 100% хлопок). <strong>Уход</strong> - инструкции по уходу за товаром.'
+        }),
         ('📁 Категории', {
             'fields': ('category', 'clothing_type', 'season'),
             'description': 'Выберите категорию и тип одежды для правильной классификации товара.'
@@ -731,6 +735,8 @@ def create_product_easy(request):
                 clothing_type_id=data.get('clothing_type_id'),
                 description=data.get('description', ''),
                 short_description=data.get('short_description', ''),
+                fabric_composition=data.get('fabric_composition', ''),
+                care_instructions=data.get('care_instructions', ''),
                 base_price=data['base_price'],
                 sale_price=data.get('sale_price'),
                 season=data.get('season', ''),

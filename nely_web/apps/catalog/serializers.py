@@ -172,6 +172,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id", "code", "name", "slug",
             "description", "short_description",
+            "fabric_composition", "care_instructions",
             "category", "category_name",
             "clothing_type", "clothing_type_name",
             "season", "season_display",

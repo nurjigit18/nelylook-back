@@ -175,7 +175,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='product',
             name='cost_price',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True, verbose_name='Расходная цена'),
+            field=models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True, verbose_name='Себестоимость'),
         ),
         migrations.AlterField(
             model_name='product',
