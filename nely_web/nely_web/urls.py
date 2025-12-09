@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import BasePermission
+from rest_framework.authentication import SessionAuthentication
 from wagtail.admin import urls as wagtailadmin_urls
 from wagtail import urls as wagtail_urls
 from wagtail.documents import urls as wagtaildocs_urls
@@ -11,15 +12,26 @@ from apps.authentication.views import (
 )
 from apps.cms_content.api import api_router, social_links_api, contact_info_api
 
-# Secure API documentation views (require admin login)
+# Custom permission that accepts Django Admin session authentication
+class IsStaffUser(BasePermission):
+    """
+    Allow access to staff users authenticated via Django session or API tokens
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_staff)
+
+# Secure API documentation views (require staff login via Django Admin)
 class SecureSpectacularAPIView(SpectacularAPIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffUser]
+    authentication_classes = [SessionAuthentication]
 
 class SecureSpectacularSwaggerView(SpectacularSwaggerView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffUser]
+    authentication_classes = [SessionAuthentication]
 
 class SecureSpectacularRedocView(SpectacularRedocView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffUser]
+    authentication_classes = [SessionAuthentication]
 
 urlpatterns = [
     path("admin/", admin.site.urls),
