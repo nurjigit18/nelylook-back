@@ -13,10 +13,10 @@ class SupabaseStorage(Storage):
     """
     Custom storage backend for Supabase with support for Cyrillic filenames
     """
-    def __init__(self):
+    def __init__(self, bucket_name=None):
         self.supabase_url = settings.SUPABASE_URL
         self.supabase_key = settings.SUPABASE_KEY
-        self.bucket_name = settings.SUPABASE_BUCKET_NAME
+        self.bucket_name = bucket_name or settings.SUPABASE_BUCKET_NAME
         
         # Lazy import to avoid issues if supabase isn't installed
         try:
@@ -216,5 +216,15 @@ class SupabaseStorage(Storage):
             '.webp': 'image/webp',
             '.svg': 'image/svg+xml',
             '.pdf': 'application/pdf',
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.mov': 'video/quicktime',
+            '.avi': 'video/x-msvideo',
+            '.mkv': 'video/x-matroska',
         }
         return content_types.get(ext, 'application/octet-stream')
+
+
+def video_storage():
+    """Factory function to create video storage instance"""
+    return SupabaseStorage(bucket_name='product-videos')

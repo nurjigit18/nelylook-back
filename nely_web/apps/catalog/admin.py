@@ -13,7 +13,7 @@ import json
 from apps.core.admin_mixins import RoleBasedAdminMixin
 from .models import (
     Category, ClothingType, Product, ProductVariant,
-    Collection, CollectionProduct, Color, Size, ProductImage, RelatedProduct
+    Collection, CollectionProduct, Color, Size, ProductImage, ProductVideo, RelatedProduct
 )
 
 
@@ -134,6 +134,29 @@ class ProductImageInline(admin.TabularInline):
     image_preview.short_description = 'Превью'
 
 
+class ProductVideoInline(admin.TabularInline):
+    """Inline admin for product videos"""
+    model = ProductVideo
+    extra = 0  # Don't show empty forms by default
+    fields = ['color', 'video_file', 'video_url', 'thumbnail_url', 'display_order', 'duration', 'video_preview']
+    readonly_fields = ['video_preview']
+    ordering = ['display_order']
+
+    def video_preview(self, obj):
+        if obj.thumbnail_url:
+            return format_html(
+                '<img src="{}" style="max-height: 50px; max-width: 100px;" /><br><small>{}</small>',
+                obj.thumbnail_url,
+                f'{obj.duration}s' if obj.duration else 'Duration not set'
+            )
+        elif obj.video_file:
+            return format_html('<a href="{}" target="_blank">View Uploaded Video</a>', obj.video_file.url)
+        elif obj.video_url:
+            return format_html('<a href="{}" target="_blank">View Video</a>', obj.video_url)
+        return "No video"
+    video_preview.short_description = 'Preview'
+
+
 class CollectionProductInline(admin.TabularInline):
     """Inline for adding products to a collection"""
     model = CollectionProduct
@@ -236,8 +259,8 @@ class ProductAdmin(RoleBasedAdminMixin, admin.ModelAdmin):
         }),
     )
     
-    # IMPORTANT: Variants first, then images
-    inlines = [ProductVariantInline, ProductImageInline]
+    # IMPORTANT: Variants first, then images, then videos
+    inlines = [ProductVariantInline, ProductImageInline, ProductVideoInline]
     
     class Media:
         css = {

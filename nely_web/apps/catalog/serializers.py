@@ -1,8 +1,8 @@
 # apps/catalog/serializers.py
 from rest_framework import serializers
 from .models import (
-    Category, ClothingType, Product, ProductVariant, 
-    ProductImage, Collection, Color, Size
+    Category, ClothingType, Product, ProductVariant,
+    ProductImage, ProductVideo, Collection, Color, Size
 )
 
 
@@ -96,6 +96,30 @@ class ProductImageSerializer(serializers.ModelSerializer):
         return None
 
 
+class ProductVideoSerializer(serializers.ModelSerializer):
+    """Serializer for ProductVideo model."""
+    id = serializers.IntegerField(read_only=True)
+    color_id = serializers.IntegerField(source='color.color_id', read_only=True, allow_null=True)
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductVideo
+        fields = ["id", "url", "video_url", "thumbnail_url", "display_order", "duration", "color_id"]
+
+    def get_url(self, obj):
+        """Get the video URL, handling both video_file and video_url"""
+        if obj.video_file:
+            from apps.core.storage import SupabaseStorage
+            storage = SupabaseStorage()
+            filename = obj.video_file.name
+            if '/' in filename:
+                filename = filename.split('/')[-1]
+            return storage.url(filename)
+        elif obj.video_url:
+            return obj.video_url
+        return None
+
+
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Serializer for ProductVariant model."""
     id = serializers.IntegerField(source="variant_id", read_only=True)
@@ -154,10 +178,11 @@ class ProductSerializer(serializers.ModelSerializer):
     
     season_display = serializers.CharField(source="get_season_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
-    
-    # Images
+
+    # Images and Videos
     images = ProductImageSerializer(many=True, read_only=True)
-    
+    videos = ProductVideoSerializer(many=True, read_only=True)
+
     # Available sizes
     available_sizes = serializers.SerializerMethodField()
     
@@ -181,6 +206,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "stock_quantity",
             "status", "status_display",
             "images",
+            "videos",
             "available_sizes",
             "default_variant_id",      # ✅ For wishlist
             "primary_color_id",        # ✅ For reference

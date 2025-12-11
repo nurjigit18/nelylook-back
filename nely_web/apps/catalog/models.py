@@ -4,6 +4,12 @@ from apps.core.storage import SupabaseStorage
 from django.utils.text import slugify
 import uuid
 
+
+def get_video_storage():
+    """Get storage instance for product videos"""
+    from apps.core.storage import video_storage
+    return video_storage()
+
 class Season(models.TextChoices):
     SPRING = "spring", "Весная"
     SUMMER = "summer", "Лето"
@@ -431,9 +437,83 @@ class CollectionProduct(models.Model):
         db_table = 'collection_products'
         verbose_name_plural = 'Коллекционные товары'
         unique_together = [['collection', 'product']]
-    
+
     def __str__(self):
         return f"{self.collection.collection_name} - {self.product.product_name}"
-    
+
+
+class ProductVideo(models.Model):
+    """Product video for showcasing items in carousel"""
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='videos',
+        verbose_name='Товар'
+    )
+    color = models.ForeignKey(
+        Color,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='videos',
+        verbose_name='Цвет'
+    )
+
+    video_file = models.FileField(
+        upload_to='product_videos/',
+        storage=get_video_storage,
+        blank=True,
+        null=True,
+        help_text="Upload video file (MP4, WebM)",
+        verbose_name='Файл видео'
+    )
+    video_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text="Supabase video URL (auto-generated or manual)",
+        verbose_name='URL видео'
+    )
+    thumbnail_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text="Video thumbnail URL",
+        verbose_name='URL миниатюры'
+    )
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Order in product gallery (0 = first)",
+        verbose_name='Порядок отображения'
+    )
+    duration = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Duration in seconds",
+        verbose_name='Длительность (сек)'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        db_table = 'product_videos'
+        ordering = ['color', 'display_order', 'created_at']
+        verbose_name = 'Видео товара'
+        verbose_name_plural = 'Видео товаров'
+
+    def save(self, *args, **kwargs):
+        """Auto-populate video_url from uploaded file"""
+        if self.video_file and not self.video_url:
+            from apps.core.storage import SupabaseStorage
+            storage = SupabaseStorage(bucket_name='product-videos')
+            # Get the URL for the uploaded file
+            filename = self.video_file.name
+            if '/' in filename:
+                filename = filename.split('/')[-1]
+            self.video_url = storage.url(filename)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        color_name = f" ({self.color.color_name})" if self.color else ""
+        return f"Video for {self.product.product_name}{color_name}"
 
 
